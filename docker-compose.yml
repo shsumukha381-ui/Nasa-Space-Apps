@@ -1,0 +1,66 @@
+version: '1.0'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: astrotwin_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: astronaut
+      POSTGRES_PASSWORD: deepspacepassword
+      POSTGRES_DB: medical_inventory
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: astrotwin_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://astronaut:deepspacepassword@db:5432/medical_inventory
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - db
+      - ollama
+    volumes:
+      - ./backend:/app
+  
+  frontend:
+    build: ./frontend
+    container_name: astrotwin_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      # Tell React where the FastAPI backend lives
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    volumes:
+      # Mount local frontend files for hot-reloading
+      - ./frontend:/app
+      - /app/node_modules
+
+  ollama:
+    image: ollama/ollama
+    container_name: astrotwin_ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  pgdata:
+  ollama_data:
