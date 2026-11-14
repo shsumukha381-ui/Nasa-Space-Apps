@@ -36,12 +36,12 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # Tell React where the FastAPI backend lives
+      # Tell React where to find the FastAPI backend when running in Docker
       - VITE_API_URL=http://localhost:8000
     depends_on:
       - backend
     volumes:
-      # Mount local frontend files for hot-reloading
+      # Mount your local frontend files so hot-reloading still works inside Docker
       - ./frontend:/app
       - /app/node_modules
 

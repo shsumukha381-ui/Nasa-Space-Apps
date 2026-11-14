@@ -1,0 +1,137 @@
+.vt-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.vt-track {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 70px;
+}
+
+.vt-track-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.3rem;
+}
+
+.vt-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.vt-value {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.vt-value.nominal { color: var(--status-nominal); }
+.vt-value.critical { color: var(--status-critical); }
+
+.vt-unit {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-left: 0.25rem;
+  font-weight: 400;
+}
+
+.vt-plot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+}
+
+.vt-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.vt-zone { fill: rgba(239, 68, 68, 0.07); }
+
+.vt-limit {
+  stroke: rgba(245, 158, 11, 0.6);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.vt-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.vt-area { fill: rgba(56, 189, 248, 0.08); stroke: none; }
+
+.vt-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
+  background: var(--accent-blue);
+  pointer-events: none;
+}
+.vt-dot.critical { background: var(--status-critical); }
+.vt-dot.last {
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  box-shadow: 0 0 8px var(--accent-blue);
+}
+.vt-dot.last.critical { box-shadow: 0 0 8px var(--status-critical); }
+
+.vt-axis,
+.vt-limit-label {
+  position: absolute;
+  font-size: 0.6rem;
+  font-family: 'Courier New', Courier, monospace;
+  pointer-events: none;
+}
+
+.vt-axis {
+  left: 4px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+.vt-axis.top { top: 2px; }
+.vt-axis.bottom { bottom: 2px; }
+
+.vt-limit-label {
+  right: 4px;
+  transform: translateY(-110%);
+  color: rgba(245, 158, 11, 0.9);
+}
+
+.vt-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.vt-footnote {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
