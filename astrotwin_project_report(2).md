@@ -88,13 +88,3 @@ To prove the system works on real spaceflight biology, the backend programmatica
 * **NASA OSDR (Open Science Data Repository):** Ingests baseline reference data from studies like OSD-288 (Combined Space Radiation, Microgravity) and OSD-817 (SANS Neuro-Ocular Syndrome).
 
 * **NASA DONKI API:** Queries real-time Space Weather (Solar Energetic Particles and Coronal Mass Ejections). If a radiation event is detected, AstroTwin automatically triggers a radiation storm shelter protocol and elevates immune biomarker monitoring.
-
-### 6. Hackathon Demo Strategy (The 30-Second Pitch)
-
-* **Slide 1 / 0:00 - 0:05 (The Problem):** Introduce the deep-space communication delay problem and the need for Earth-Independent Medical Operations (EIMO). Briefly note the Hub-and-Spoke model for low-power wearables.
-
-* **Slide 2 / 0:05 - 0:12 (The Interface):** Show the interactive 3D Bio-Twin UI and the mock Tempus Pro / Smartwatch vitals streaming in seamlessly.
-
-* **Slide 3 / 0:12 - 0:20 (The Sandbox & Synergy):** Open the "Judge's Sandbox" and drag the Solar Radiation and CO2 sliders up. Watch the Bio-Twin instantly flag a multi-stressor anomaly.
-
-* **Slide 4 / 0:20 - 0:30 (Triage & Stewardship):** Show the LangGraph RAG backend outputting a step-by-step treatment protocol, complete with the Medical Locker location and radiation degradation warnings, without needing to contact Earth.
