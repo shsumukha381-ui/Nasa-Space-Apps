@@ -414,48 +414,82 @@ class EnvInputs(BaseModel):
 
 @app.post("/api/environment")
 def set_environment(e: EnvInputs, background_tasks: BackgroundTasks):
+    """Judge's Sandbox values. Evaluates sliders on EVERY move and dynamically builds the triage protocol."""
     env_state.update(e.model_dump())
-    env_critical = e.co2 > 3500 or e.radiation > 70
     
-    if env_critical and not latest_state.get("is_critical"):
+    # 1. Determine if the environment is critical based on any slider crossing a threshold
+    env_critical = e.co2 >= 2000 or e.radiation >= 11.0 or e.days >= 90 or e.sleep <= 6.0
+    
+    if env_critical:
+        # We removed the 'and not' lock. This forces the state to update on EVERY slider drag!
         latest_state["is_critical"] = True
         latest_state["tier"] = "Tier 2 - Critical Triage"
-        latest_state["status"] = "Environmental Hazard Detected"
+        latest_state["status"] = "Multi-Stressor Hazard Detected"
         
         steps = []
         flags = []
         findings = []
         headline_parts = []
+        rationale_sentences = []
         
-        if e.co2 > 3500:
-            flags.append("hypercapnia")
-            findings.append({"label": "Cabin CO2", "value": f"{e.co2} ppm", "state": "alert"})
-            headline_parts.append("severe hypercapnia")
-            steps.append(_step("Lower cabin CO2", "Move to the best-ventilated module. Inspect CO2 scrubber and swap lithium hydroxide canisters immediately."))
-            
-        if e.radiation > 70:
+        # Dynamically build the response based on which sliders are in the red
+        if e.radiation >= 11.0:
             flags.append("radiation_spike")
             findings.append({"label": "Radiation", "value": f"{e.radiation} idx", "state": "alert"})
-            headline_parts.append("radiation storm")
+            headline_parts.append("Radiation Storm")
             steps.append(_step("Radiation Shelter", "Move to the storm shelter or most shielded area immediately. Log cumulative dose from personal dosimeters."))
+            rationale_sentences.append("Severe radiation damages cellular DNA.")
+            
+        if e.co2 >= 2000:
+            flags.append("hypercapnia")
+            findings.append({"label": "Cabin CO2", "value": f"{e.co2} ppm", "state": "alert"})
+            headline_parts.append("Scrubber Failure")
+            steps.append(_step("Lower Cabin CO2", "Move to the best-ventilated module. Inspect CO2 scrubber and swap lithium hydroxide canisters immediately."))
+            rationale_sentences.append("High CO2 impairs cognition and respiration.")
 
+        if e.days >= 90:
+            flags.append("bone_loss")
+            findings.append({"label": "Microgravity Exposure", "value": f"{e.days} days", "state": "alert"})
+            headline_parts.append("Deep-Space Transit")
+            steps.append(_step("Protect Bone Density", "Recommended: take 1 tablet (10 mg) of alendronate. Ensure daily resistive exercise (ARED) is completed.", get_item("Alendronate")))
+            steps.append(_step("Reverse Fluid Shift", "Apply -20 mmHg Lower Body Negative Pressure using the thigh cuffs to mitigate SANS.", get_item("LBNP")))
+            rationale_sentences.append("Prolonged microgravity accelerates bone resorption and fluid shifts.")
+
+        if e.sleep <= 6.0:
+            flags.append("fatigue")
+            findings.append({"label": "Sleep Deficit", "value": f"{e.sleep} hrs", "state": "alert"})
+            headline_parts.append("Cognitive Fatigue")
+            steps.append(_step("Dynamic Lighting", "Trigger 5,000 K at 300 lux lighting schedule (ARCHeR protocol) to combat circadian misalignment."))
+            rationale_sentences.append("Sleep deprivation severely impacts mission readiness.")
+
+        # Combine the triggered hazards into a single intelligent protocol
+        headline = " + ".join(headline_parts) if headline_parts else "Multi-Stressor Anomaly"
+        
         protocol = {
             "id": next(_protocol_ids),
             "created_at": time.time(),
             "severity": "CRITICAL",
-            "headline": (" + ".join(headline_parts)).title(),
+            "headline": headline,
             "findings": findings,
             "steps": [{"n": i, **s} for i, s in enumerate(steps, 1)],
-            "monitoring": ["Monitor vital signs every 15 minutes.", "Remain in shelter until environmental hazards clear."],
+            "monitoring": ["Monitor vital signs every 15 minutes.", "Review spacecraft telemetry."],
             "escalation": "Report to Mission Control immediately.",
             "source": "NASA Deep Space Environmental Limits (local library)",
             "flags": flags,
-            "rationale": "High CO2 impairs cognition and breathing, while severe radiation damages cellular DNA. Immediate shelter and ventilation repair are required.",
+            "rationale": " ".join(rationale_sentences) + " Immediate countermeasures are required.",
             "rationale_status": "ready",
         }
         
         latest_state["protocol"] = protocol
         latest_state["triage_protocol"] = protocol_as_text(protocol)
+        
+    else:
+        # If sliders are dragged back to normal, clear the alerts
+        latest_state["is_critical"] = False
+        latest_state["tier"] = "Tier 1 - Routine"
+        latest_state["status"] = "Nominal"
+        latest_state["protocol"] = None
+        latest_state["triage_protocol"] = "None required. Continue standard mission operations."
 
     return {"ok": True, "extra_potency_loss_pct": env_potency_loss()}
 

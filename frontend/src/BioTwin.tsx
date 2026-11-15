@@ -12,7 +12,7 @@ const MODEL_HEIGHT = 3.2;
 const FEET_Y = -1.57;          
 const ROTATION_Y = 0;          
 const ANCHOR_Z = 0.4;          // Pushed out slightly for the bulkier suit
-const DOT_SPREAD = 1.25;       
+const DOT_SPREAD = 0.9;       
 const HOTSPOT_Y = 0;           
 const CAMERA_Z = 5.5;          // Pulled camera back slightly
 // ---------------------------------------------------------------------
@@ -64,17 +64,34 @@ function Hotspot({ sys, selected, onSelect }: { sys: SystemState; selected: bool
 
   return (
     <>
-      <mesh position={anchor} renderOrder={10}>
+      {/* FIX: Added click and hover handlers directly to the 3D anchor dot */}
+      <mesh 
+        position={anchor} 
+        renderOrder={10}
+        onClick={(e) => { e.stopPropagation(); onSelect(sys.id); }}
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onPointerOver={(e) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; }}
+        onPointerOut={(e) => { e.stopPropagation(); setHover(false); document.body.style.cursor = 'default'; }}
+      >
         <sphereGeometry args={[0.035, 16, 16]} />
         <meshBasicMaterial color={color} depthTest={false} />
       </mesh>
+      
       <Line points={[anchor, dot]} color={color} lineWidth={1.2} transparent opacity={0.75} depthTest={false} />
+      
       <Html position={dot} center zIndexRange={[20, 0]}>
         <div className="bt-root">
           <button
             className="bt-btn"
             style={{ borderColor: color, boxShadow: `0 0 12px ${color}` }}
-            onClick={() => onSelect(sys.id)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect(sys.id);
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onPointerUp={(e) => e.stopPropagation()}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
             aria-label={`${sys.label}: ${sys.status}`}

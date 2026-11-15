@@ -104,11 +104,13 @@ function App() {
   );
 
   const pickSystem = (id: SystemId | null) => {
-    setSelected(id);
-    if (id) {
-      setTab('guide');
-    }
-  };
+      setSelected(id);
+      if (id) {
+        setTab('guide');
+        // Fix: Instantly jump to the Triage view no matter which page you are currently on
+        if (view !== 'triage') setView('triage');
+      }
+    };
 
   const dispense = (item: TriageItem, key: string) => {
     fetch(`${API}/api/inventory/dispense`, {
