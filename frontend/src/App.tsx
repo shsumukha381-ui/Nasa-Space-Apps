@@ -114,6 +114,7 @@ function Dashboard({ mission }: { mission: ReturnType<typeof useMissionState> })
   const dispenseRequests = useRef(new Map<string, string>());
   const [dispensePending, setDispensePending] = useState(false);
   const [dispenseError, setDispenseError] = useState<string | null>(null);
+  const [unconfirmedDispenses, setUnconfirmedDispenses] = useState<string[]>([]);
   const [simulationBusy, setSimulationBusy] = useState(false);
   const [applying, setApplying] = useState(false);
   const [environmentResult, setEnvironmentResult] = useState<{ inputs: Inputs; tone: 'success' | 'error'; text: string } | null>(null);
@@ -174,8 +175,8 @@ function Dashboard({ mission }: { mission: ReturnType<typeof useMissionState> })
   }
 
   async function dispense(item: TriageItem, key: string) {
-    if (!connected || !canDispense || (!demoMode && !activeSystem.live) || simulationLocked || unlocked.includes(key)) return;
     const priorKey = dispenseRequests.current.get(key);
+    if (!connected || !canDispense || (!demoMode && !activeSystem.live && !priorKey) || simulationLocked || unlocked.includes(key)) return;
     if (priorKey && !data?.access) {
       setDispenseError('The earlier dispense is unconfirmed. Check the inventory before recording it again.');
       return;
@@ -188,10 +189,14 @@ function Dashboard({ mission }: { mission: ReturnType<typeof useMissionState> })
     try {
       await api.dispense(item.name, requestKey, session);
       dispenseRequests.current.delete(key);
+      setUnconfirmedDispenses((current) => current.filter((itemKey) => itemKey !== key));
       setUnlocked((current) => [...current, key]);
     } catch (error) {
       if (error instanceof ApiError && error.status < 500 && error.status !== 408 && error.status !== 429) {
         dispenseRequests.current.delete(key);
+        setUnconfirmedDispenses((current) => current.filter((itemKey) => itemKey !== key));
+      } else if (data?.access) {
+        setUnconfirmedDispenses((current) => current.includes(key) ? current : [...current, key]);
       }
       handleUnauthorized(error, session);
       setDispenseError(getErrorMessage(error));
@@ -380,7 +385,9 @@ function Dashboard({ mission }: { mission: ReturnType<typeof useMissionState> })
                     onDispense={dispense}
                     dispensePending={dispensePending}
                     dispenseError={dispenseError}
-                    inventoryAvailable={connected && canDispense && (demoMode || Boolean(activeSystem.live)) && !applying && !simulationBusy}
+                    unconfirmedDispenses={unconfirmedDispenses}
+                    inventoryAvailable={connected && canDispense && !applying && !simulationBusy}
+                    canRecordDispense={demoMode || Boolean(activeSystem.live)}
                   />
                 )}
               </div>
