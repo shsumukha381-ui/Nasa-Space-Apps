@@ -1,9 +1,8 @@
-import { createRoot } from "react-dom/client"
-import App from "./App.tsx"
-import './index.css'
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
 
-const root = createRoot(document.getElementById("root"));
+const container = document.getElementById('root');
+if (!container) throw new Error('AstroTwin root element is missing.');
 
-root.render(
-    <App />
-)
+createRoot(container).render(<App />);

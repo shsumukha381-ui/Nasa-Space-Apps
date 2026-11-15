@@ -1,77 +1,91 @@
-.demo-menu {
-  width: 220px;
-  background-color: var(--panel-bg);
-  border-right: 1px solid var(--panel-border);
-  display: flex;
-  flex-direction: column;
-  padding: 1.5rem 1rem;
-  flex-shrink: 0;
-  overflow-y: auto;
+.demo-content {
+  display: grid;
+  gap: 14px;
+  padding: 0 20px 20px;
 }
 
-.dm-header {
-  font-size: 0.85rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--accent-blue);
-  display: flex;
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.scenario-button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
-}
-
-.dm-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.dm-subtitle {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text-secondary);
-  margin-bottom: 0.25rem;
-}
-
-.dm-desc {
-  font-size: 0.7rem;
-  color: #64748b;
-  line-height: 1.4;
-  margin-bottom: 0.25rem;
-}
-
-.dm-btn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--panel-border);
+  gap: 9px;
+  width: 100%;
+  min-height: 61px;
+  padding: 9px;
   color: var(--text-primary);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  text-align: left;
+  background: var(--surface-subtle);
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+}
+
+.scenario-button:enabled:hover {
+  background: #172831;
+  border-color: #3b6771;
+}
+
+.scenario-icon {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--scenario-color);
+  background: color-mix(in srgb, var(--scenario-color) 12%, transparent);
+}
+
+.scenario-green { --scenario-color: #78e5ae; }
+.scenario-amber { --scenario-color: #ffc887; }
+.scenario-red { --scenario-color: #ff8f9d; }
+.scenario-purple { --scenario-color: #c9a9ff; }
+.scenario-blue { --scenario-color: #99bfff; }
+
+.scenario-button strong,
+.nasa-check strong {
+  display: block;
+  font-size: .8125rem;
+  line-height: 1.25;
+}
+
+.scenario-button small,
+.nasa-check small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: .72rem;
+  line-height: 1.35;
+}
+
+.scenario-chevron { color: var(--text-secondary); }
+
+.nasa-check {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #101e2a;
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+}
+
+.demo-feedback, .demo-muted {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  cursor: pointer;
-  text-align: left;
-  transition: all 0.2s;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: .8rem;
+  line-height: 1.5;
 }
 
-.dm-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: #475569;
-}
-
-.dm-btn.edge {
-  background: rgba(168, 85, 247, 0.08);
-  border-color: rgba(168, 85, 247, 0.3);
-}
-.dm-btn.edge:hover {
-  background: rgba(168, 85, 247, 0.15);
-}
-
-.dm-divider {
-  height: 1px;
-  background: var(--panel-border);
-  margin: 1.5rem 0;
+@media (max-width: 480px) {
+  .demo-content { padding: 0 14px 14px; }
+  .scenario-grid { grid-template-columns: 1fr; }
+  .nasa-check .button { grid-column: 1 / -1; }
 }

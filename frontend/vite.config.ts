@@ -1,15 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+const proxy = {
+  '/api': 'http://127.0.0.1:8000',
+}
+
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: true, // Forces Vite to expose the server to the Docker network
+    host: true,
     port: 5173,
     strictPort: true,
+    proxy,
     watch: {
-      usePolling: true // Ensures hot-reloading works inside Docker volumes
-    }
-  }
+      usePolling: true,
+    },
+  },
+  preview: { proxy },
 })

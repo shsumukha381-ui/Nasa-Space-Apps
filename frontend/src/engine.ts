@@ -10,7 +10,7 @@ export interface SystemState {
   risk: number;      // 0..1
   status: Status;
   reason: string;
-  live?: boolean;    // true when a real Tempus reading raised this system
+  live?: boolean;    // true when a backend flag affects this system
 }
 
 export const DEFAULT_INPUTS: Inputs = { co2: 1200, radiation: 10, days: 30, sleep: 7.5 };
@@ -58,9 +58,7 @@ export function computeSynergy(i: Inputs): Record<SystemId, SystemState> {
 }
 
 // ---------------------------------------------------------------------------
-// Real Tempus readings win over the simulation: if the backend raised a flag,
-// the matching body system is raised to at least caution (critical for a
-// CRITICAL protocol), whatever the sandbox sliders say.
+// Backend flags raise the matching system to at least the reported protocol severity.
 // ---------------------------------------------------------------------------
 const FLAG_TO_SYSTEM: Record<string, { id: SystemId; reason: string }> = {
   hypoxia: { id: 'lungs', reason: 'Live Tempus reading: low blood oxygen (SpO₂).' },
@@ -68,6 +66,8 @@ const FLAG_TO_SYSTEM: Record<string, { id: SystemId; reason: string }> = {
   hypertension: { id: 'heart', reason: 'Live Tempus reading: high blood pressure.' },
   edema: { id: 'eyes', reason: 'Live Tempus ultrasound: optic disc edema.' },
   bone_loss: { id: 'bones', reason: 'Live Tempus scan: bone density loss.' },
+  hypercapnia: { id: 'lungs', reason: 'The backend flagged elevated cabin CO₂.' },
+  radiation_spike: { id: 'immune', reason: 'The backend reported a radiation spike.' },
 };
 
 export function applyLiveFlags(

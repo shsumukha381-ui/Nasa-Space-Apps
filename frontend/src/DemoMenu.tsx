@@ -1,130 +1,115 @@
 import { useState } from 'react';
-import { Activity, Watch, ShieldAlert, CheckCircle2, Bone, Eye, Wind, Satellite, Radio } from 'lucide-react';
+import { Activity, Bone, Check, ChevronRight, Eye, Radio, Satellite, ShieldAlert, Watch, Wind } from 'lucide-react';
+import { api, getErrorMessage, type ApiSession, type TempusTelemetry } from './api';
 import './DemoMenu.css';
 
-const API_VITALS = 'http://localhost:8000/api/tempus/vitals';
-const API_NASA = 'http://localhost:8000/api/nasa/sync';
-
-interface Payload {
-  heart_rate: number;
-  spo2: number;
-  bp_sys: number;
-  bp_dia: number;
-  ultrasound_status: string;
-  bone_status: string;
-  device: string;
-}
-
-const r = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-const base = (): Payload => ({
-  heart_rate: r(60, 80), spo2: r(97, 100), bp_sys: r(110, 120), bp_dia: r(70, 80),
-  ultrasound_status: 'Clear', bone_status: 'Normal', device: 'Tempus Pro - Lunar Base'
-});
-
-const runSequence = async (anomalyFn: () => Payload) => {
-  for (let i = 0; i < 3; i++) {
-    await fetch(API_VITALS, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(base()),
-    });
-    await new Promise(resolve => setTimeout(resolve, 1200)); 
-  }
-  await fetch(API_VITALS, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(anomalyFn()),
-  });
+const NOMINAL: TempusTelemetry = {
+  heart_rate: 73,
+  spo2: 98,
+  bp_sys: 118,
+  bp_dia: 76,
+  ultrasound_status: 'Clear',
+  bone_status: 'Normal',
+  device: 'Tempus Pro · simulation',
 };
 
 const SCENARIOS = [
-  { label: 'Nominal Recovery', icon: CheckCircle2, color: 'var(--status-nominal)', action: () => runSequence(() => base()) },
-  { label: 'Hypoxia (Lungs)', icon: Wind, color: 'var(--status-warning)', action: () => runSequence(() => ({ ...base(), spo2: r(86, 92) })) },
-  { label: 'Edema (SANS)', icon: Eye, color: 'var(--status-warning)', action: () => runSequence(() => ({ ...base(), ultrasound_status: 'Optic Disc Edema Detected' })) },
-  { label: 'Bone Resorption', icon: Bone, color: 'var(--status-warning)', action: () => runSequence(() => ({ ...base(), bone_status: 'Bone Density Loss Detected' })) },
-  { label: 'Full System Anomaly', icon: ShieldAlert, color: 'var(--status-critical)', action: () => runSequence(() => ({ ...base(), heart_rate: r(110, 130), spo2: r(88, 93), bp_sys: r(140, 160), bp_dia: r(90, 100), ultrasound_status: 'Optic Disc Edema Detected' })) },
-];
+  { id: 'nominal', title: 'Nominal recovery', detail: 'Send stable readings', icon: Check, tone: 'green', vitals: NOMINAL },
+  { id: 'hypoxia', title: 'Hypoxia', detail: 'Low oxygen saturation', icon: Wind, tone: 'amber', vitals: { ...NOMINAL, spo2: 89 } },
+  { id: 'edema', title: 'Optic disc edema', detail: 'Abnormal ultrasound finding', icon: Eye, tone: 'amber', vitals: { ...NOMINAL, ultrasound_status: 'Optic Disc Edema Detected' } },
+  { id: 'bone', title: 'Bone density loss', detail: 'Abnormal bone scan', icon: Bone, tone: 'amber', vitals: { ...NOMINAL, bone_status: 'Bone Density Loss Detected' } },
+  { id: 'anomaly', title: 'Multi-system anomaly', detail: 'Combined vital signs and ultrasound alert', icon: ShieldAlert, tone: 'red', vitals: { ...NOMINAL, heart_rate: 123, spo2: 89, bp_sys: 151, bp_dia: 96, ultrasound_status: 'Optic Disc Edema Detected' } },
+  { id: 'wearable', title: 'Wearable alert', detail: 'Simulated Astro-Watch telemetry', icon: Watch, tone: 'purple', vitals: { ...NOMINAL, heart_rate: 113, spo2: 92, bp_sys: 130, bp_dia: 85, ultrasound_status: 'Not measured', bone_status: 'Not measured', device: 'Astro-Watch · simulation' } },
+] as const;
 
-const EDGE_SCENARIO = {
-  label: 'Trigger Edge Node Alert',
-  icon: Watch,
-  color: '#a855f7',
-  action: () => runSequence(() => ({
-    heart_rate: r(105, 120), spo2: r(88, 94), bp_sys: r(120, 135), bp_dia: r(80, 90),
-    ultrasound_status: 'Clear', bone_status: 'Normal', device: 'Astro-Watch Series 1 (Edge Node)'
-  }))
-};
+interface Props {
+  disabled: boolean;
+  allowScenarios: boolean;
+  session: ApiSession | null;
+  onBusyChange: (busy: boolean) => void;
+  onUpdated: () => void;
+  onUnauthorized: (error: unknown, attemptedSession: ApiSession | null) => void;
+}
 
-// ADDED THE PROP HERE
-export default function DemoMenu({ onNasaSpike }: { onNasaSpike?: () => void }) {
-  const [nasaLive, setNasaLive] = useState(false);
+const waitForPoll = () => new Promise<void>((resolve) => setTimeout(resolve, 1350));
 
-  const toggleNasaSync = async () => {
-    const newState = !nasaLive;
-    setNasaLive(newState);
+export default function DemoMenu({ disabled, allowScenarios, session, onBusyChange, onUpdated, onUnauthorized }: Props) {
+  const [running, setRunning] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+
+  async function execute(id: string, action: () => Promise<string>) {
+    if (running || disabled) return;
+    setRunning(id);
+    setFeedback(null);
+    onBusyChange(true);
     try {
-      await fetch(API_NASA, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: newState }),
-      });
-      
-      // TELL THE FRONTEND TO JUMP THE SLIDER
-      if (newState && onNasaSpike) {
-        onNasaSpike();
-      }
-      
-    } catch (e) {
-      console.error("NASA API Connection failed", e);
-      setNasaLive(false);
+      setFeedback({ tone: 'success', text: await action() });
+    } catch (error) {
+      onUnauthorized(error, session);
+      setFeedback({ tone: 'error', text: getErrorMessage(error) });
+    } finally {
+      onUpdated();
+      onBusyChange(false);
+      setRunning(null);
     }
-  };
+  }
+
+  async function runScenario({ id, title, vitals }: (typeof SCENARIOS)[number]) {
+    if (!allowScenarios) return;
+    const baseline: TempusTelemetry = id === 'wearable'
+      ? { ...NOMINAL, ultrasound_status: 'Not measured', bone_status: 'Not measured' }
+      : NOMINAL;
+    await execute(id, async () => {
+      for (const heart_rate of [68, 76, 71]) {
+        await api.sendVitals({ ...baseline, heart_rate, device: vitals.device });
+        onUpdated();
+        await waitForPoll();
+      }
+      await api.sendVitals(vitals);
+      return `${title} complete. See the latest readings in Overview.`;
+    });
+  }
+
+  async function checkNasa() {
+    await execute('nasa', () => api.syncNasa(session));
+  }
 
   return (
-    <aside className="demo-menu">
-      <div className="dm-header">
-        <Activity size={16} /> DEMO CONTROL
+    <section className="panel demo-panel" aria-labelledby="demo-title">
+      <div className="card-heading">
+        <div className="card-heading-main">
+          <span className="card-icon"><Radio size={19} aria-hidden="true" /></span>
+          <div>
+            <h2 id="demo-title">{allowScenarios ? 'Telemetry scenarios' : 'Mission references'}</h2>
+            {allowScenarios && <p>Test readings replace the current backend telemetry.</p>}
+          </div>
+        </div>
       </div>
-      
-      <div className="dm-section">
-        <div className="dm-subtitle">OFFICIAL NASA APIs</div>
-        <p className="dm-desc">Query live OSDR & DONKI Space Weather databases.</p>
-        <button 
-          className="dm-btn" 
-          onClick={toggleNasaSync}
-          style={{ 
-            borderColor: nasaLive ? 'var(--status-nominal)' : 'var(--panel-border)',
-            background: nasaLive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(255, 255, 255, 0.03)'
-          }}
-        >
-          {nasaLive ? <Radio size={14} color="var(--status-nominal)" className="animate-pulse" /> : <Satellite size={14} color="var(--text-secondary)" />}
-          {nasaLive ? 'Uplink Active (Live)' : 'Connect NASA Uplink'}
-        </button>
-      </div>
-
-      <div className="dm-divider" />
-
-      <div className="dm-section">
-        <div className="dm-subtitle">TEMPUS PRO (HUB)</div>
-        {SCENARIOS.map((s) => (
-          <button key={s.label} className="dm-btn" onClick={s.action}>
-            <s.icon size={14} style={{ color: s.color }} />
-            {s.label}
+      <div className="demo-content">
+        {allowScenarios && <div className="scenario-grid">
+          {SCENARIOS.map((scenario) => (
+            <button className="scenario-button" type="button" key={scenario.id} onClick={() => void runScenario(scenario)} disabled={disabled || running !== null}>
+              <span className={`scenario-icon scenario-${scenario.tone}`}><scenario.icon size={16} aria-hidden="true" /></span>
+              <span><strong>{scenario.title}</strong><small>{running === scenario.id ? 'Sending readings…' : scenario.detail}</small></span>
+              <ChevronRight className="scenario-chevron" size={14} aria-hidden="true" />
+            </button>
+          ))}
+        </div>}
+        <div className="nasa-check">
+          <span className="scenario-icon scenario-blue"><Satellite size={17} aria-hidden="true" /></span>
+          <div><strong>NASA records</strong><small>Check historical OSDR and DONKI references.</small></div>
+          <button type="button" className="button button-secondary" disabled={disabled || running !== null} onClick={() => void checkNasa()}>
+            {running === 'nasa' ? 'Checking…' : 'Check records'}
           </button>
-        ))}
+        </div>
+        {disabled && !running && <p className="demo-muted">These actions are available when the API is connected and idle.</p>}
+        {(running || feedback) && (
+          <p className={`demo-feedback ${feedback ? `result-${feedback.tone}` : ''}`} role={feedback?.tone === 'error' ? 'alert' : 'status'}>
+            {!feedback && <Activity size={15} aria-hidden="true" />}
+            {feedback?.text ?? (running === 'nasa' ? 'Waiting for NASA records…' : 'Waiting for the backend to process the sequence…')}
+          </p>
+        )}
       </div>
-
-      <div className="dm-divider" />
-
-      <div className="dm-section">
-        <div className="dm-subtitle">WEARABLE (SPOKE)</div>
-        <p className="dm-desc">Simulates GPU-less TinyML bypassing network until critical.</p>
-        <button className="dm-btn edge" onClick={EDGE_SCENARIO.action}>
-          <EDGE_SCENARIO.icon size={14} style={{ color: EDGE_SCENARIO.color }} />
-          {EDGE_SCENARIO.label}
-        </button>
-      </div>
-    </aside>
+    </section>
   );
 }

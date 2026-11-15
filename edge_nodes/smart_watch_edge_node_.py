@@ -2,11 +2,13 @@
 AstroTwin Hub-and-Spoke Edge Node Simulator
 Represents a low-power, GPU-less wearable biomonitor running quantized TinyML.
 """
+import os
 import time
 import random
 import requests
 
-HUB_URL = "http://localhost:8000/api/tempus/vitals"
+BASE_URL = os.getenv("ASTROTWIN_API_URL", "http://localhost:8000").rstrip("/")
+HUB_URL = f"{BASE_URL}/api/tempus/vitals"
 DEVICE = "Astro-Watch Series 1 (Edge Node)"
 
 def generate_vitals(anomaly=False):
@@ -16,8 +18,8 @@ def generate_vitals(anomaly=False):
             "spo2": random.randint(88, 94),          # SpO2 < 95
             "bp_sys": random.randint(120, 135),
             "bp_dia": random.randint(80, 90),
-            "ultrasound_status": "Clear",            # Wearables lack ultrasound
-            "bone_status": "Normal",                 # Wearables lack DEXA scans
+            "ultrasound_status": "Not measured",
+            "bone_status": "Not measured",
             "device": DEVICE
         }
     else:
@@ -26,8 +28,8 @@ def generate_vitals(anomaly=False):
             "spo2": random.randint(97, 100),
             "bp_sys": random.randint(110, 120),
             "bp_dia": random.randint(70, 80),
-            "ultrasound_status": "Clear",
-            "bone_status": "Normal",
+            "ultrasound_status": "Not measured",
+            "bone_status": "Not measured",
             "device": DEVICE
         }
 
@@ -45,16 +47,16 @@ def main():
             vitals = generate_vitals(anomaly=is_anomaly)
             
             # --- Feature G: The Edge Logic Gate ---
-            # Completely independent of the heavy LLM backend until this threshold is breached.
+            # The simulated wearable sends only threshold breaches to the hub.
             if vitals["heart_rate"] > 100 and vitals["spo2"] < 95:
                 print(f"\n[EDGE AI ALERT] Critical threshold breached! (HR: {vitals['heart_rate']}, SpO2: {vitals['spo2']}%)")
                 print("--> Waking up network radio...")
-                print(f"--> Transmitting JSON payload to heavy CDSS Hub...")
+                print("--> Transmitting JSON payload to AstroTwin...")
                 
                 try:
                     res = requests.post(HUB_URL, json=vitals, timeout=5)
                     res.raise_for_status()
-                    print("--> Transmission successful. Hub is generating LangGraph protocol.")
+                    print("--> Transmission successful. Hub recorded the reading.")
                 except requests.exceptions.ConnectionError:
                     print("--> ERROR: Spacecraft Hub server is unreachable.")
             else:

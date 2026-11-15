@@ -15,13 +15,14 @@ Examples
 """
 import argparse
 import json
+import os
 import random
 import sys
 import time
  
 import requests
  
-BASE_URL = "http://localhost:8000"
+BASE_URL = os.getenv("ASTROTWIN_API_URL", "http://localhost:8000").rstrip("/")
 HUB_URL = f"{BASE_URL}/api/tempus/vitals"
 STATE_URL = f"{BASE_URL}/api/state"
 RESET_URL = f"{BASE_URL}/api/debug/reset"
@@ -227,4 +228,3 @@ def main():
  
 if __name__ == "__main__":
     main()
- 

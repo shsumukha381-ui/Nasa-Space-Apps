@@ -1,0 +1,34 @@
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ""
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+
+  backend:
+    environment:
+      ASTROTWIN_MODE: production
+      ASTROTWIN_OPERATOR_KEY: ""
+      ASTROTWIN_OPERATOR_KEY_FILE: /run/secrets/operator_key
+      ASTROTWIN_TELEMETRY_KEY: ""
+      ASTROTWIN_TELEMETRY_KEY_FILE: /run/secrets/telemetry_key
+      ASTROTWIN_VIEWER_KEY: ""
+      ASTROTWIN_VIEWER_KEY_FILE: /run/secrets/viewer_key
+      POSTGRES_PASSWORD: ""
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - operator_key
+      - telemetry_key
+      - viewer_key
+      - postgres_password
+
+secrets:
+  operator_key:
+    file: ${ASTROTWIN_OPERATOR_KEY_HOST_FILE:?Set the operator key file path}
+  telemetry_key:
+    file: ${ASTROTWIN_TELEMETRY_KEY_HOST_FILE:?Set the telemetry key file path}
+  viewer_key:
+    file: ${ASTROTWIN_VIEWER_KEY_HOST_FILE:?Set the viewer key file path}
+  postgres_password:
+    file: ${POSTGRES_PASSWORD_HOST_FILE:?Set the PostgreSQL password file path}
