@@ -4,11 +4,17 @@ AstroTwin accepts Tempus and wearable telemetry, tracks environmental alerts, re
 
 ## Run locally with Docker
 
-```powershell
+For a fresh checkout, start Docker and run:
+
+```sh
+git clone https://github.com/shsumukha381-ui/Nasa-Space-Apps.git
+cd Nasa-Space-Apps
 docker compose up --build --wait
 ```
 
 Open [the dashboard](http://127.0.0.1:5173/) or [the demo API docs](http://127.0.0.1:8000/docs). Demo mode seeds an initial kit and enables simulation controls and debug endpoints. Docker publishes the web and API ports on loopback and keeps PostgreSQL on a private network.
+
+To make changes, create a branch locally with `git switch -c my-changes`. After editing, run `docker compose up --build --wait` again to build and serve your changes. Push your branch with `git push -u origin my-changes` if you have write access to the repository. If you use a fork, push to your fork instead.
 
 ### Update an existing checkout
 
