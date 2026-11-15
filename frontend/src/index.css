@@ -1,4 +1,3 @@
-
 :root {
   --bg-deep-space: #070b14;
   --panel-bg: #111827;
@@ -91,8 +90,8 @@ body {
 /* Grid Layout */
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 3fr 3.6fr 3.2fr; /* hologram column is narrower now */
-  grid-template-rows: minmax(0, 1fr); /* row fits the window; panels scroll inside instead of stretching the page */
+  grid-template-columns: 3fr 3.6fr 3.2fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 1.5rem;
   flex: 1;
   min-height: 0;
@@ -148,7 +147,7 @@ body {
 }
  
 .col-center {
-  background-color: #090e17; /* Darker background for 3D model */
+  background-color: #090e17;
   border: 1px solid var(--panel-border);
   border-radius: 8px;
   position: relative;
@@ -247,24 +246,39 @@ body {
   margin-bottom: 0.5rem;
 }
 
-.sb-presets { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+/* ---- Active Preset Button Styling ---- */
+.sb-presets { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 0.5rem; 
+  margin-bottom: 1.5rem; 
+}
+
 .sb-preset {
   background: rgba(56, 189, 248, 0.05); 
   color: var(--text-secondary);
   border: 1px solid rgba(56, 189, 248, 0.2); 
-  border-radius: 4px;
-  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.05em;
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
 .sb-preset:hover { 
   background: rgba(56, 189, 248, 0.15); 
-  color: var(--accent-blue);
+  color: #e0f2fe;
   border-color: rgba(56, 189, 248, 0.5);
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
+.sb-preset.active {
+  background: var(--accent-blue);
+  color: #06121f;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
 }
 
 /* ---- Right-panel tabs ---- */
@@ -297,31 +311,57 @@ body {
   box-shadow: 0 0 5px var(--status-critical); 
 }
 
-/* ---- Sandbox Sliders Customization ---- */
+/* ---- Enhanced Sandbox Sliders ---- */
 .sandbox-control input[type=range] {
   -webkit-appearance: none;
   width: 100%;
-  height: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
   outline: none;
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
+  position: relative;
 }
+
+/* Create the colored track before the thumb */
+.sandbox-control input[type=range]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--accent-blue);
+  border-radius: 3px;
+  /* width is set via inline style in React */
+  z-index: 1;
+}
+
+.sandbox-control.danger input[type=range]::before {
+  background: var(--status-critical);
+}
+
 .sandbox-control input[type=range]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--accent-blue);
+  background: #ffffff;
+  border: 2px solid var(--accent-blue);
   cursor: pointer;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.5);
-  transition: transform 0.1s;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+  transition: transform 0.1s ease;
+  position: relative;
+  z-index: 2;
 }
-.sandbox-control input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
 .sandbox-control.danger input[type=range]::-webkit-slider-thumb {
-  background: var(--status-critical);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+  border-color: var(--status-critical);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+}
+
+.sandbox-control input[type=range]::-webkit-slider-thumb:hover { 
+  transform: scale(1.3); 
 }
 
 /* ---- Master Navigation Sidebar ---- */
