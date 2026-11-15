@@ -60,13 +60,15 @@ export default function SandboxPanel({ inputs, onChange }: { inputs: Inputs; onC
       <div className="sb-controls">
         {SLIDERS.map((slider) => {
           const value = inputs[slider.key];
+          const sliderValue = Math.min(slider.max, Math.max(slider.min, value));
           const inputId = `${id}-${slider.key}`;
-          const fill = `${100 * (value - slider.min) / (slider.max - slider.min)}%`;
+          const fill = `${100 * (sliderValue - slider.min) / (slider.max - slider.min)}%`;
+          const outsideRange = sliderValue !== value;
           return (
             <div key={slider.key} className="sb-control" data-elevated={slider.danger(value)} style={{ '--sb-fill': fill } as CSSProperties}>
               <div className="sb-control-label">
                 <label htmlFor={inputId}>{slider.label}</label>
-                <span aria-hidden="true">{value.toLocaleString()} <small>{slider.unit}</small></span>
+                <span aria-hidden="true">{value.toLocaleString()} <small>{slider.unit}{outsideRange ? ' · outside preview range' : ''}</small></span>
               </div>
               <input
                 id={inputId}
@@ -74,8 +76,8 @@ export default function SandboxPanel({ inputs, onChange }: { inputs: Inputs; onC
                 min={slider.min}
                 max={slider.max}
                 step={slider.step}
-                value={value}
-                aria-valuetext={`${value} ${slider.spokenUnit}`}
+                value={sliderValue}
+                aria-valuetext={`${sliderValue} ${slider.spokenUnit}${outsideRange ? `, reported value ${value} outside preview range` : ''}`}
                 onChange={(event) => onChange({ ...inputs, [slider.key]: event.currentTarget.valueAsNumber })}
               />
             </div>
