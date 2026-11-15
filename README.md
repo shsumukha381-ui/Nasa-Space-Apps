@@ -8,7 +8,7 @@ The interactive 3D crew twin lets you inspect modeled risks across six body syst
 
 ## Run locally with Docker
 
-For a fresh checkout, start Docker and run:
+For a fresh checkout, start Docker and run the commands below. If you work from a fork, clone your fork's URL instead.
 
 ```sh
 git clone https://github.com/shsumukha381-ui/Nasa-Space-Apps.git
