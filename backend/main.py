@@ -72,9 +72,10 @@ nasa_collection = chroma_client.get_or_create_collection(name="nasa_medical_prot
  
 nasa_collection.upsert(
     documents=[
-        "SANS & Optic Disc Edema Protocol: Do not evacuate. Apply -20 mmHg Lower Body Negative Pressure (LBNP) using thigh cuffs to reverse cephalad fluid shifts. Administer targeted B-Vitamin complex. Reduce cabin PCO2 levels."
+        "SANS & Optic Disc Edema Protocol: Do not evacuate. Apply -20 mmHg Lower Body Negative Pressure (LBNP) using thigh cuffs to reverse cephalad fluid shifts. Administer targeted B-Vitamin complex. Reduce cabin PCO2 levels.",
+        "Spaceflight Bone Loss Protocol: Microgravity accelerates bone resorption. Continue daily resistive exercise (ARED) and give alendronate 10 mg with plain water, upright for 30 minutes. Track bone density and log resistive loading.",
     ],
-    ids=["protocol_sans"]
+    ids=["protocol_sans", "protocol_bone"]
 )
  
 class TempusTelemetry(BaseModel):
@@ -84,6 +85,7 @@ class TempusTelemetry(BaseModel):
     bp_dia: int
     ultrasound_status: str
     device: str
+    bone_status: str = "Normal"   # optional so older simulators keep working
  
 latest_state = {
     "vitals": {"heart_rate": "--", "spo2": "--", "bp_sys": "--", "bp_dia": "--"},
@@ -97,19 +99,58 @@ latest_state = {
 # ---------------------------------------------------------------------------
 # Inventory lookup (real DB values, never invented by the LLM)
 # ---------------------------------------------------------------------------
+UNITS = {"B-Vitamin": "doses", "Alendronate": "pills", "O2": "tanks", "LBNP": "kits"}
+LOW_STOCK = 3          # at or below this many left -> LOW STOCK
+UNUSABLE_LOSS = 50.0   # potency loss at or above this -> do not rely on the item
+
+def _unit_for(name: str) -> str:
+    for key, unit in UNITS.items():
+        if key.lower() in name.lower():
+            return unit
+    return "units"
+
+def _row_to_item(row):
+    """Turn a DB row into the dict the UI shows, including the safety check."""
+    qty = row.quantity or 0
+    loss = float(row.potency_reduction_pct or 0.0)
+
+    if qty <= 0:
+        status, warning = "out", "OUT OF STOCK. Do not count on this item; ask the Crew Medical Officer for an alternative."
+    elif loss >= UNUSABLE_LOSS:
+        status, warning = "unusable", f"Potency reduced by {loss:.0f}% due to flight duration. Too degraded to rely on; confirm with the Crew Medical Officer."
+    elif loss > 0:
+        status, warning = ("low" if qty <= LOW_STOCK else "degraded"), f"Potency reduced by {loss:.0f}% due to flight duration and radiation."
+    elif qty <= LOW_STOCK:
+        status, warning = "low", None
+    else:
+        status, warning = "ok", None
+
+    return {
+        "name": row.medication,
+        "qty": qty,
+        "unit": _unit_for(row.medication),
+        "location": row.location,
+        "potency_loss_pct": loss,
+        "status": status,        # ok | low | degraded | unusable | out
+        "warning": warning,
+    }
+
 def get_item(name_fragment: str):
+    """Cross-reference one medication in the DB (None if it is not in the kit at all)."""
     db = SessionLocal()
-    row = db.query(MedicalInventory).filter(MedicalInventory.medication.ilike(f"%{name_fragment}%")).first()
-    item = None
-    if row:
-        item = {
-            "name": row.medication,
-            "qty": row.quantity,
-            "location": row.location,
-            "potency_loss_pct": row.potency_reduction_pct or 0.0,
-        }
-    db.close()
-    return item
+    try:
+        row = db.query(MedicalInventory).filter(MedicalInventory.medication.ilike(f"%{name_fragment}%")).first()
+        return _row_to_item(row) if row else None
+    finally:
+        db.close()
+
+def list_inventory():
+    db = SessionLocal()
+    try:
+        rows = db.query(MedicalInventory).order_by(MedicalInventory.id).all()
+        return [_row_to_item(r) for r in rows]
+    finally:
+        db.close()
  
 # ---------------------------------------------------------------------------
 # Deterministic protocol builder: rules decide, the LLM only explains.
@@ -117,6 +158,9 @@ def get_item(name_fragment: str):
 _protocol_ids = itertools.count(1)
  
 def _step(title, action, item=None, caution=None):
+    # Feature F: the DB check decides what the astronaut is told, not the LLM.
+    if item and item.get("warning"):
+        caution = f"{caution} {item['warning']}" if caution else item["warning"]
     return {"title": title, "action": action, "item": item, "caution": caution}
  
 def build_protocol(v: TempusTelemetry):
@@ -126,7 +170,11 @@ def build_protocol(v: TempusTelemetry):
     tachy = v.heart_rate > 100
     htn = v.bp_sys >= 140 or v.bp_dia >= 90
     edema = "Edema" in v.ultrasound_status
- 
+    bone = "Loss" in v.bone_status
+
+    if bone:
+        flags.append("bone_loss")
+        findings.append({"label": "Bone density", "value": "Resorption", "state": "alert"})
     if hypoxia:
         flags.append("hypoxia")
         findings.append({"label": "SpO2", "value": f"{v.spo2}%", "state": "low"})
@@ -147,6 +195,7 @@ def build_protocol(v: TempusTelemetry):
     if tachy: names.append("fast heart rate")
     if htn: names.append("high blood pressure")
     if edema: names.append("optic disc swelling")
+    if bone: names.append("bone density loss")
     headline = (" + ".join(names)).capitalize() if names else "Abnormal reading"
  
     steps = []
@@ -167,6 +216,13 @@ def build_protocol(v: TempusTelemetry):
                            get_item("B-Vitamin")))
         steps.append(_step("Lower cabin CO2",
                            "Check the CO2 scrubber and increase cabin ventilation, then re-check the cabin CO2 reading."))
+    if bone:
+        alen = get_item("Alendronate")
+        steps.append(_step("Protect bone (alendronate)",
+                           "Recommended: take 1 tablet (10 mg) of alendronate with a full glass of plain water, "
+                           "and stay upright for 30 minutes. Then do today's resistive exercise (ARED).",
+                           alen,
+                           "Do not lie down for 30 minutes after taking it."))
     if tachy or htn:
         steps.append(_step("Rest and re-measure",
                            "Stop strenuous activity and rest for 10 minutes, then re-measure heart rate and blood pressure."))
@@ -176,15 +232,18 @@ def build_protocol(v: TempusTelemetry):
     monitoring = ["Re-measure HR, SpO2 and BP every 10 minutes until they are back to normal."]
     if edema:
         monitoring.append("Repeat the optic ultrasound after treatment to check for improvement.")
- 
+    if bone:
+        monitoring.append("Log weekly ARED resistive loading metrics and recheck bone density at the next scan.")
+
     # Source: show the retrieved NASA guideline when it actually applies
     source = "Onboard vitals thresholds (HR > 100, SpO2 < 95, BP >= 140/90)"
-    if edema:
+    if edema or bone:
+        query = v.ultrasound_status if edema else "spaceflight bone loss resorption alendronate"
         try:
-            doc = nasa_collection.query(query_texts=[v.ultrasound_status], n_results=1)["documents"][0][0]
+            doc = nasa_collection.query(query_texts=[query], n_results=1)["documents"][0][0]
             source = doc.split(":")[0] + " (local NASA HRP library)"
         except Exception:
-            source = "SANS & Optic Disc Edema Protocol (local NASA HRP library)"
+            source = ("SANS & Optic Disc Edema Protocol" if edema else "Spaceflight Bone Loss Protocol") + " (local NASA HRP library)"
  
     return {
         "id": next(_protocol_ids),
@@ -204,6 +263,8 @@ def build_protocol(v: TempusTelemetry):
  
 def fallback_rationale(flags):
     parts = []
+    if "bone_loss" in flags:
+        parts.append("In microgravity bones lose density faster, so medication and resistive exercise help protect them.")
     if "edema" in flags:
         parts.append("Optic disc swelling in microgravity can be a sign of fluid shifting toward the head (SANS).")
     if "hypoxia" in flags:
@@ -284,6 +345,7 @@ def ingest_tempus_data(vitals: TempusTelemetry, background_tasks: BackgroundTask
         or vitals.bp_sys >= 140
         or vitals.bp_dia >= 90
         or "Edema" in vitals.ultrasound_status
+        or "Loss" in vitals.bone_status
     )
     latest_state["vitals"] = vitals.model_dump()
     latest_state["is_critical"] = is_critical
@@ -322,9 +384,36 @@ def reset_debug_state():
     latest_state["protocol"] = None
     return {"ok": True, "cache_cleared": True}
  
+class InventoryUpdate(BaseModel):
+    medication: str                       # name or fragment, e.g. "Alendronate"
+    quantity: int | None = None
+    potency_reduction_pct: float | None = None
+
+@app.post("/api/debug/inventory")
+def update_inventory(u: InventoryUpdate):
+    """Testing helper: change stock or potency to see the safety check react."""
+    db = SessionLocal()
+    try:
+        row = db.query(MedicalInventory).filter(MedicalInventory.medication.ilike(f"%{u.medication}%")).first()
+        if not row:
+            return {"ok": False, "error": f"no inventory item matches '{u.medication}'"}
+        if u.quantity is not None:
+            row.quantity = max(0, u.quantity)
+        if u.potency_reduction_pct is not None:
+            row.potency_reduction_pct = max(0.0, min(100.0, u.potency_reduction_pct))
+        db.commit()
+        return {"ok": True, "item": _row_to_item(row)}
+    finally:
+        db.close()
+
 @app.get("/api/state")
 def get_current_state():
     state = dict(latest_state)
+    try:
+        state["inventory"] = list_inventory()   # live DB values for the inventory panel
+    except Exception as e:
+        print(f"[db] inventory read failed: {e}")
+        state["inventory"] = []
     p = state.get("protocol")
     if p:
         p = dict(p)

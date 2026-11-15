@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Activity, Zap, HeartPulse, Settings, Database, Crosshair, TrendingUp } from 'lucide-react';
+import { Activity, Zap, HeartPulse, Settings, Database, TrendingUp } from 'lucide-react';
 import HumanModel from './HumanModel';
 import VitalsChart, { type VitalsSample } from './VitalsChart';
-import TriagePanel, { type Protocol } from './TriagePanel';
+import TriagePanel, { type Protocol, type TriageItem } from './TriagePanel';
+import InventoryPanel from './InventoryPanel';
 import './index.css'; 
 
 const HISTORY_LIMIT = 40;
@@ -14,7 +15,8 @@ function App() {
     tier: 'Standby',
     triage_protocol: 'System standing by...',
     is_critical: false,
-    protocol: null as Protocol | null
+    protocol: null as Protocol | null,
+    inventory: [] as TriageItem[]
   });
   
   const [selectedBodyPart, setSelectedBodyPart] = useState<string | null>(null);
@@ -51,6 +53,11 @@ function App() {
 
   const envCritical = radiationLevel > 70 || co2Level > 1200;
   const systemCritical = data.is_critical || envCritical;
+  const inUse = new Set<string>(
+    data.is_critical
+      ? (data.protocol?.steps ?? []).flatMap((st) => (st.item ? [st.item.name] : []))
+      : []
+  );
 
   return (
     <>
@@ -151,18 +158,8 @@ function App() {
         {/* Right Column: Medical Kit & Triage */}
         <div className="col-right">
           
-          {/* Feature F: Pharmacokinetic Stewardship */}
-          <div className="panel">
-            <div className="panel-header"><Crosshair size={16} color="#38bdf8" /> MEDICAL INVENTORY (DB)</div>
-            <div className="data-row" style={{ padding: '0.25rem 0' }}>
-              <span className="data-label">B-Vitamin Complex</span>
-              <span className="data-value" style={{ fontSize: '1.25rem' }}>42 <span className="data-unit">doses</span></span>
-            </div>
-            <div className="data-row" style={{ padding: '0.25rem 0', borderBottom: 'none' }}>
-              <span className="data-label">Alendronate (10mg)</span>
-              <span className="data-value" style={{ fontSize: '1.25rem' }}>14 <span className="data-unit">pills</span></span>
-            </div>
-          </div>
+          {/* Feature F: live inventory from the database; items in the active protocol are highlighted */}
+          <InventoryPanel items={data.inventory ?? []} inUse={inUse} />
 
           <div className={`panel ${data.is_critical ? 'critical' : ''}`} style={{flex: 1, minHeight: 0}}>
             <div className="panel-header" style={{justifyContent: 'space-between'}}>
