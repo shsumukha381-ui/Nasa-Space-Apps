@@ -120,7 +120,21 @@ function App() {
     <div style={{ display: 'flex', height: '100%', width: '100%' }}>
       
       {/* 1. The Demo Menu on the left */}
-      <DemoMenu />
+      <DemoMenu onNasaSpike={() => {
+        // 1. DONKI (Radiation) + OSDR (Microgravity / Time in space)
+        // Pushing Days in Space to 600 creates the critical synergy that turns the model RED.
+        setInputs(prev => ({ ...prev, radiation: 85, days: 600 }));
+        
+        // 2. Kickstart a nominal Tempus reading so the charts aren't empty
+        fetch('http://localhost:8000/api/tempus/vitals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            heart_rate: 75, spo2: 98, bp_sys: 118, bp_dia: 76,
+            ultrasound_status: 'Clear', bone_status: 'Normal', device: 'Tempus Pro - Lunar Base'
+          })
+        });
+      }} />
 
       {/* 2. The main dashboard flex container */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '1.5rem', overflow: 'hidden', position: 'relative' }}>
