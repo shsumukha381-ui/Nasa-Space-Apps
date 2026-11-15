@@ -323,3 +323,57 @@ body {
   background: var(--status-critical);
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
 }
+
+/* ---- Master Navigation Sidebar ---- */
+.master-nav {
+  width: 72px;
+  background: var(--bg-deep-space);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 0;
+  gap: 1.5rem;
+  z-index: 10;
+  flex-shrink: 0;
+}
+.nav-brand {
+  color: var(--accent-blue);
+  font-weight: 900;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  letter-spacing: 1px;
+}
+.nav-item {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.nav-item:hover {
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
+}
+.nav-item.active {
+  background: var(--accent-blue);
+  color: #06121f;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+}
+
+/* ---- Full Page Overrides ---- */
+.inventory-page .panel { flex: 1; }
+.inventory-page .inv-list { max-height: none; flex: 1; }
+
+.demo-page .demo-menu {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+}
