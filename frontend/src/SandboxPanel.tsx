@@ -23,9 +23,9 @@ const SLIDERS: Slider[] = [
 
 const PRESETS: { name: string; values: Inputs }[] = [
   { name: 'Baseline', values: DEFAULT_INPUTS },
-  { name: 'Radiation storm', values: { co2: 1500, radiation: 92, days: 120, sleep: 6 } },
-  { name: 'Scrubber failure', values: { co2: 4600, radiation: 20, days: 90, sleep: 5.5 } },
-  { name: 'Mars transit', values: { co2: 2600, radiation: 55, days: 700, sleep: 6 } },
+  { name: 'Radiation storm', values: { ...DEFAULT_INPUTS, radiation: 92 } },
+  { name: 'Scrubber failure', values: { ...DEFAULT_INPUTS, co2: 4800 } },
+  { name: 'Mars transit', values: { co2: 1500, radiation: 55, days: 400, sleep: 6 } },
   { name: 'Combined hazards', values: { co2: 4800, radiation: 95, days: 400, sleep: 4 } },
 ];
 

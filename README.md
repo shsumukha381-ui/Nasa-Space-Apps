@@ -1,6 +1,10 @@
 # AstroTwin Crew Health Monitoring
 
+Built by Team DevOperations to explore health monitoring during deep-space missions, where communication delays can limit real-time support from Earth.
+
 AstroTwin accepts Tempus and wearable telemetry, tracks environmental alerts, records medical-kit stock changes, and serves the crew dashboard. PostgreSQL stores the current mission state, telemetry history, alert history, inventory, and audit events.
+
+The interactive 3D crew twin lets you inspect modeled risks across six body systems. Use the Simulation Lab presets to preview a radiation storm or cabin scrubber failure, and apply the environment to see the backend assessment in demo mode. NASA lookups provide optional historical context. Telemetry and alert evaluation run locally.
 
 ## Run locally with Docker
 
