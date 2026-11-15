@@ -36,6 +36,7 @@ export interface Protocol {
   source: string;
   rationale: string;
   rationale_status: 'pending' | 'ready' | 'fallback';
+  flags?: string[];   // which readings tripped (hypoxia, tachycardia, hypertension, edema, bone_loss)
   age_s: number;
 }
 
