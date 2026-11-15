@@ -1,56 +1,87 @@
-import { Settings } from 'lucide-react';
+import { useId, type CSSProperties } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import { DEFAULT_INPUTS, type Inputs } from './engine';
+import './SandboxPanel.css';
 
-interface SliderDef { key: keyof Inputs; label: string; unit: string; min: number; max: number; step: number; danger: (v: number) => boolean }
+interface Slider {
+  key: keyof Inputs;
+  label: string;
+  unit: string;
+  spokenUnit: string;
+  min: number;
+  max: number;
+  step: number;
+  danger: (value: number) => boolean;
+}
 
-const SLIDERS: SliderDef[] = [
-  { key: 'co2', label: 'Cabin CO₂', unit: 'ppm', min: 400, max: 5000, step: 50, danger: (v) => v > 3500 },
-  { key: 'radiation', label: 'Solar Radiation Flux', unit: 'idx', min: 0, max: 100, step: 1, danger: (v) => v > 70 },
-  { key: 'days', label: 'Days in Space', unit: 'd', min: 0, max: 900, step: 5, danger: (v) => v > 600 },
-  { key: 'sleep', label: 'Hours of Sleep', unit: 'h', min: 3, max: 9, step: 0.5, danger: (v) => v < 5 },
+const SLIDERS: Slider[] = [
+  { key: 'co2', label: 'Cabin CO₂', unit: 'ppm', spokenUnit: 'parts per million', min: 400, max: 5000, step: 50, danger: (value) => value > 3500 },
+  { key: 'radiation', label: 'Solar radiation', unit: 'index', spokenUnit: 'index', min: 0, max: 100, step: 1, danger: (value) => value > 70 },
+  { key: 'days', label: 'Mission duration', unit: 'days', spokenUnit: 'days', min: 0, max: 900, step: 5, danger: (value) => value > 600 },
+  { key: 'sleep', label: 'Sleep per night', unit: 'h', spokenUnit: 'hours', min: 3, max: 9, step: 0.5, danger: (value) => value < 5 },
 ];
 
 const PRESETS: { name: string; values: Inputs }[] = [
-  { name: 'Nominal', values: DEFAULT_INPUTS },
+  { name: 'Baseline', values: DEFAULT_INPUTS },
   { name: 'Radiation storm', values: { co2: 1500, radiation: 92, days: 120, sleep: 6 } },
   { name: 'Scrubber failure', values: { co2: 4600, radiation: 20, days: 90, sleep: 5.5 } },
   { name: 'Mars transit', values: { co2: 2600, radiation: 55, days: 700, sleep: 6 } },
-  { name: 'Perfect storm', values: { co2: 4800, radiation: 95, days: 400, sleep: 4 } },
+  { name: 'Combined hazards', values: { co2: 4800, radiation: 95, days: 400, sleep: 4 } },
 ];
 
-export default function SandboxPanel({ inputs, onChange }: { inputs: Inputs; onChange: (i: Inputs) => void }) {
+export default function SandboxPanel({ inputs, onChange }: { inputs: Inputs; onChange: (inputs: Inputs) => void }) {
+  const id = useId();
+  const selected = PRESETS.find((preset) => SLIDERS.every(({ key }) => inputs[key] === preset.values[key]));
+
   return (
-    <div className="panel" style={{ flex: '0 1 auto', minHeight: 0, overflowY: 'auto' }}>
-      <div className="panel-header">
-        <Settings size={16} color="#9ca3af" /> JUDGE'S SANDBOX
+    <section className="sb" aria-labelledby={`${id}-title`}>
+      <div className="sb-header">
+        <div className="sb-icon"><SlidersHorizontal size={17} aria-hidden="true" /></div>
+        <div>
+          <h2 id={`${id}-title`}>Scenario sandbox</h2>
+          <p>Simulate mission conditions and see how modeled crew risk changes.</p>
+        </div>
       </div>
 
-      <div className="sb-presets">
-        {PRESETS.map((p) => (
-          <button key={p.name} className="sb-preset" onClick={() => onChange(p.values)}>
-            {p.name}
+      <div className="sb-presets" role="group" aria-label="Scenario presets">
+        {PRESETS.map((preset) => (
+          <button
+            key={preset.name}
+            className="sb-preset"
+            type="button"
+            aria-pressed={selected === preset}
+            onClick={() => onChange(preset.values)}
+          >
+            {preset.name}
           </button>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem 1.5rem' }}>
-        {SLIDERS.map((s) => (
-          <div key={s.key} className={`sandbox-control ${s.danger(inputs[s.key]) ? 'danger' : ''}`} style={{ marginBottom: 0 }}>
-            <label style={{ fontSize: '0.75rem' }}>
-              <span>{s.label}</span>
-              <span>{inputs[s.key]} {s.unit}</span>
-            </label>
-            <input
-              type="range"
-              min={s.min}
-              max={s.max}
-              step={s.step}
-              value={inputs[s.key]}
-              onChange={(e) => onChange({ ...inputs, [s.key]: Number(e.target.value) })}
-            />
-          </div>
-        ))}
+      <div className="sb-controls">
+        {SLIDERS.map((slider) => {
+          const value = inputs[slider.key];
+          const inputId = `${id}-${slider.key}`;
+          const fill = `${100 * (value - slider.min) / (slider.max - slider.min)}%`;
+          return (
+            <div key={slider.key} className="sb-control" data-elevated={slider.danger(value)} style={{ '--sb-fill': fill } as CSSProperties}>
+              <div className="sb-control-label">
+                <label htmlFor={inputId}>{slider.label}</label>
+                <span aria-hidden="true">{value.toLocaleString()} <small>{slider.unit}</small></span>
+              </div>
+              <input
+                id={inputId}
+                type="range"
+                min={slider.min}
+                max={slider.max}
+                step={slider.step}
+                value={value}
+                aria-valuetext={`${value} ${slider.spokenUnit}`}
+                onChange={(event) => onChange({ ...inputs, [slider.key]: event.currentTarget.valueAsNumber })}
+              />
+            </div>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

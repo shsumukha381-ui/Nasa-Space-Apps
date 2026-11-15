@@ -1,106 +1,110 @@
+import { useId } from 'react';
+import type { VitalsSample } from './api';
 import './VitalsChart.css';
 
-export interface VitalsSample {
-  hr: number;
-  spo2: number;
-  sys: number;
-  dia: number;
-}
+export type { VitalsSample } from './api';
 
-interface TrackProps {
+interface Metric {
+  key: keyof VitalsSample;
   label: string;
   unit: string;
-  values: number[];
   min: number;
   max: number;
-  limit: number;
-  /** 'above' = critical when value > limit, 'below' = critical when value < limit */
-  direction: 'above' | 'below';
+  interval: number;
+  threshold: number;
+  operator: '>' | '<' | '≥';
 }
 
-const H = 40; // SVG viewBox height (width is 100, stretched to fit)
-const OK = '#38bdf8';
-const BAD = '#ef4444';
+const METRICS: Metric[] = [
+  { key: 'hr', label: 'Heart rate', unit: 'bpm', min: 50, max: 140, interval: 10, threshold: 100, operator: '>' },
+  { key: 'spo2', label: 'Oxygen saturation', unit: '%', min: 85, max: 100, interval: 5, threshold: 95, operator: '<' },
+  { key: 'sys', label: 'Systolic pressure', unit: 'mmHg', min: 90, max: 170, interval: 10, threshold: 140, operator: '≥' },
+  { key: 'dia', label: 'Diastolic pressure', unit: 'mmHg', min: 60, max: 110, interval: 10, threshold: 90, operator: '≥' },
+];
 
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+const WIDTH = 100;
+const HEIGHT = 40;
+const INSET = 2;
 
-function Track({ label, unit, values, min, max, limit, direction }: TrackProps) {
-  const key = label.replace(/\W/g, '');
-  const n = values.length;
-  const toY = (v: number) => H - ((clamp(v, min, max) - min) / (max - min)) * H;
-  const toX = (i: number) => (n < 2 ? 50 : (i / (n - 1)) * 100);
+function isOutsideThreshold(value: number, metric: Metric) {
+  if (metric.operator === '<') return value < metric.threshold;
+  if (metric.operator === '≥') return value >= metric.threshold;
+  return value > metric.threshold;
+}
 
-  const isCritical = (v: number) => (direction === 'above' ? v > limit : v < limit);
-
-  const last = n > 0 ? values[n - 1] : null;
-  const lastCritical = last !== null && isCritical(last);
-
-  const path = values.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i).toFixed(2)},${toY(v).toFixed(2)}`).join(' ');
-  const area = n > 1 ? `${path} L100,${H} L0,${H} Z` : '';
-
-  const limitY = toY(limit);
-  const p = limitY / H;
-  // Danger zone is above the limit line for 'above', below it for 'below'
-  const zoneY = direction === 'above' ? 0 : limitY;
-  const zoneH = direction === 'above' ? limitY : H - limitY;
-  // The line is red only on the danger side of the threshold, blue everywhere else
-  const topColor = direction === 'above' ? BAD : OK;
-  const bottomColor = direction === 'above' ? OK : BAD;
+function Track({ metric, values }: { metric: Metric; values: number[] }) {
+  const gradientId = useId();
+  const { label, unit, interval, operator, threshold } = metric;
+  const first = values[0];
+  const last = values.at(-1);
+  const outOfRange = last !== undefined && isOutsideThreshold(last, metric);
+  const min = Math.floor(Math.min(metric.min, ...values) / interval) * interval;
+  const max = Math.ceil(Math.max(metric.max, ...values) / interval) * interval;
+  const toY = (value: number) => INSET + ((max - value) / (max - min)) * (HEIGHT - 2 * INSET);
+  const toX = (index: number) => values.length < 2 ? WIDTH - INSET : INSET + index / (values.length - 1) * (WIDTH - 2 * INSET);
+  const path = values.map((value, index) => `${index === 0 ? 'M' : 'L'}${toX(index)},${toY(value)}`).join(' ');
+  const area = values.length > 1 ? `${path} L${WIDTH - INSET},${HEIGHT} L${INSET},${HEIGHT} Z` : undefined;
+  const thresholdY = toY(threshold);
+  const lowerZone = operator === '<';
+  const upperColor = lowerZone ? 'var(--vitals-accent)' : 'var(--vitals-alert)';
+  const lowerColor = lowerZone ? 'var(--vitals-alert)' : 'var(--vitals-accent)';
+  const trend = values.length > 1 ? `From ${first} to ${last} ${unit}.` : `One reading at ${last} ${unit}.`;
 
   return (
-    <div className="vt-track">
-      <div className="vt-track-head">
+    <figure className="vt-track">
+      <figcaption className="vt-track-head">
         <span className="vt-label">{label}</span>
-        <span className={`vt-value ${last === null ? '' : lastCritical ? 'critical' : 'nominal'}`}>
-          {last === null ? '--' : last}
+        <span className={`vt-value${outOfRange ? ' vt-value-alert' : ''}`}>
+          {last === undefined ? '—' : last}
           <span className="vt-unit">{unit}</span>
         </span>
+      </figcaption>
+      <div className="vt-chart-row">
+        <div className="vt-plot" role="img" aria-label={`${label}. ${last === undefined ? 'Awaiting telemetry.' : trend}`}>
+          <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id={gradientId} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={HEIGHT}>
+                <stop offset={0} stopColor={upperColor} />
+                <stop offset={thresholdY / HEIGHT} stopColor={upperColor} />
+                <stop offset={thresholdY / HEIGHT} stopColor={lowerColor} />
+                <stop offset={1} stopColor={lowerColor} />
+              </linearGradient>
+            </defs>
+            <rect className="vt-zone" x="0" y={lowerZone ? thresholdY : 0} width={WIDTH} height={lowerZone ? HEIGHT - thresholdY : thresholdY} />
+            <line className="vt-limit" x1="0" x2={WIDTH} y1={thresholdY} y2={thresholdY} />
+            {area && <path className="vt-area" d={area} />}
+            {values.length > 1 && <path className="vt-line" d={path} stroke={`url(#${gradientId})`} />}
+          </svg>
+          {last === undefined ? (
+            <span className="vt-empty" aria-hidden="true">Awaiting telemetry</span>
+          ) : (
+            <span
+              className={`vt-marker${outOfRange ? ' vt-marker-alert' : ''}`}
+              style={{ left: `${toX(values.length - 1)}%`, top: `${toY(last) / HEIGHT * 100}%` }}
+              aria-hidden="true"
+            />
+          )}
+        </div>
+        <div className="vt-axis" aria-hidden="true"><span>{max}</span><span>{min}</span></div>
       </div>
-
-      <div className="vt-plot">
-        <svg viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" role="img" aria-label={`${label} trend`}>
-          <defs>
-            <linearGradient id={`vt-grad-${key}`} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={H}>
-              <stop offset={0} stopColor={topColor} />
-              <stop offset={p} stopColor={topColor} />
-              <stop offset={p} stopColor={bottomColor} />
-              <stop offset={1} stopColor={bottomColor} />
-            </linearGradient>
-          </defs>
-          <rect x="0" y={zoneY} width="100" height={zoneH} className="vt-zone" />
-          <line x1="0" x2="100" y1={limitY} y2={limitY} className="vt-limit" />
-          {area && <path d={area} className="vt-area" />}
-          {path && <path d={path} className="vt-line" stroke={`url(#vt-grad-${key})`} />}
-        </svg>
-
-        {/* Dots are HTML so they stay circles even though the SVG is stretched */}
-        {values.map((v, i) => (
-          <span
-            key={i}
-            className={`vt-dot ${isCritical(v) ? 'critical' : ''} ${i === n - 1 ? 'last' : ''}`}
-            style={{ left: `${toX(i)}%`, top: `${(toY(v) / H) * 100}%` }}
-          />
-        ))}
-
-        <span className="vt-axis top">{max}</span>
-        <span className="vt-axis bottom">{min}</span>
-        <span className="vt-limit-label" style={{ top: `${p * 100}%` }}>
-          {limit}
-        </span>
-        {n === 0 && <span className="vt-empty">Awaiting telemetry…</span>}
+      <div className="vt-threshold">
+        <span className="vt-limit-key" aria-hidden="true" />
+        <span>Alert {operator} {threshold} {unit}</span>
+        {outOfRange && <strong>Outside threshold</strong>}
       </div>
-    </div>
+    </figure>
   );
 }
 
 export default function VitalsChart({ history }: { history: VitalsSample[] }) {
   return (
     <div className="vt-wrap">
-      <Track label="Heart Rate" unit="BPM" values={history.map((s) => s.hr)} min={50} max={140} limit={100} direction="above" />
-      <Track label="Blood O2 (SpO2)" unit="%" values={history.map((s) => s.spo2)} min={85} max={100} limit={95} direction="below" />
-      <Track label="Systolic BP" unit="mmHg" values={history.map((s) => s.sys)} min={90} max={170} limit={140} direction="above" />
+      <div className="vt-grid">
+        {METRICS.map((metric) => <Track key={metric.key} metric={metric} values={history.map((sample) => sample[metric.key])} />)}
+      </div>
       <div className="vt-footnote">
-        Last {history.length} readings, oldest → newest · dashed line = alert threshold · red = out of range
+        <span>{history.length} {history.length === 1 ? 'reading' : 'readings'}</span>
+        {history.length > 1 && <span>Oldest to latest <span aria-hidden="true">→</span></span>}
       </div>
     </div>
   );

@@ -1,103 +1,130 @@
-import { BookOpen, ClipboardList, Lock, Pill, Stethoscope } from 'lucide-react';
-import { GUIDE, PROTOCOLS, STATUS_COLOR, SYSTEM_ITEM, type SystemState } from './engine';
-import type { TriageItem } from './TriagePanel';
+import { AlertTriangle, ArrowUpRight, BookOpen, Check, ChevronDown, ClipboardList, Package, Radio } from 'lucide-react';
+import type { TriageItem } from './api';
+import { GUIDE, PROTOCOLS, SYSTEM_ITEM, type SystemState } from './engine';
 import './SystemPanel.css';
 
 const DRAWERS = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4'];
 
-/** "Medical Locker B, Drawer 2" -> "B2" (null when the location is not a locker drawer). */
-export function drawerOf(location: string): string | null {
-  const m = location.match(/Locker\s+([A-C])\D+(\d)/i);
-  return m ? `${m[1].toUpperCase()}${m[2]}` : null;
+function drawerOf(location: string): string | null {
+  const match = location.match(/Locker\s+([A-C]),?\s+Drawer\s+(\d+)/i);
+  return match ? `${match[1].toUpperCase()}${match[2]}` : null;
 }
 
 interface Props {
   system: SystemState;
   inventory: TriageItem[];
   unlocked: string[];
-  onDispense: (item: TriageItem, drawerKey: string) => void;
+  onDispense: (item: TriageItem, itemKey: string) => void;
+  inventoryAvailable?: boolean;
+  dispensePending?: boolean;
+  dispenseError?: string | null;
 }
 
-export default function SystemPanel({ system, inventory, unlocked, onDispense }: Props) {
-  const color = STATUS_COLOR[system.status];
+export default function SystemPanel({
+  system,
+  inventory,
+  unlocked,
+  onDispense,
+  inventoryAvailable = true,
+  dispensePending = false,
+  dispenseError,
+}: Props) {
   const guide = GUIDE[system.id];
   const protocol = PROTOCOLS[system.id];
   const fragment = SYSTEM_ITEM[system.id];
-  const item = fragment ? inventory.find((i) => i.name.toLowerCase().includes(fragment.toLowerCase())) : undefined;
+  const item = fragment ? inventory.find((candidate) => candidate.name.toLowerCase().includes(fragment.toLowerCase())) : undefined;
   const drawer = item ? drawerOf(item.location) : null;
-  const key = item ? drawer ?? item.name : '';
-  const open = unlocked.includes(key);
-  const blocked = item ? item.status === 'out' || item.status === 'unusable' : false;
-  const needsKit = system.status !== 'nominal';
+  const recorded = item ? unlocked.includes(item.name) : false;
+  const blocked = item ? item.qty <= 0 || item.status === 'out' || item.status === 'unusable' : false;
+  const elevated = system.status !== 'nominal';
+  const risk = Math.round(system.risk * 100);
 
   return (
-    <div className="sp-scroll">
-      <div className="sp-title">
-        <span className="sp-dot" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
-        <h3>{system.label}</h3>
-        <span className="sp-status" style={{ color, borderColor: color }}>
-          {system.status.toUpperCase()} · {Math.round(system.risk * 100)}%
-        </span>
+    <div className="sp">
+      <div className="sp-assessment" data-status={system.status}>
+        <div className="sp-assessment-top">
+          <h3>{system.label}</h3>
+          <span className="sp-status"><span aria-hidden="true" />{system.status}</span>
+        </div>
+        <p className="sp-reason">{system.reason}</p>
+        <div className="sp-risk">
+          <span>Modeled risk</span>
+          <strong>{risk}%</strong>
+        </div>
+        <progress aria-label="Modeled risk" value={risk} max={100}>{risk}%</progress>
+        {system.live && <p className="sp-live"><Radio size={13} aria-hidden="true" /> Includes a telemetry flag</p>}
       </div>
-      <p className="sp-reason">{system.reason}</p>
 
-      <h4 className="sp-section"><BookOpen size={14} /> What this system does</h4>
-      <p className="sp-text">{guide.what}</p>
+      <details className="sp-detail">
+        <summary><BookOpen size={16} aria-hidden="true" /> About this system <ChevronDown size={15} aria-hidden="true" /></summary>
+        <div className="sp-detail-body">
+          <p>{guide.what}</p>
+          <p>{guide.why}</p>
+        </div>
+      </details>
 
-      <h4 className="sp-section"><Stethoscope size={14} /> Why check it</h4>
-      <p className="sp-text">{guide.why}</p>
-
-      <h4 className="sp-section"><ClipboardList size={14} /> How to check it yourself</h4>
-      <ol className="sp-steps">
-        {guide.how.map((s, i) => (
-          <li key={i}><span className="sp-num">{i + 1}</span><span>{s}</span></li>
-        ))}
-      </ol>
-
-      {needsKit && (
-        <>
-          <h4 className="sp-section sp-protocol">{protocol.title}</h4>
+      <details className="sp-detail">
+        <summary><ClipboardList size={16} aria-hidden="true" /> Self-check reference <ChevronDown size={15} aria-hidden="true" /></summary>
+        <div className="sp-detail-body">
           <ol className="sp-steps">
-            {protocol.steps.map((s, i) => (
-              <li key={i}><span className="sp-num warn">{i + 1}</span><span>{s}</span></li>
-            ))}
+            {guide.how.map((step) => <li key={step}>{step}</li>)}
           </ol>
-        </>
+        </div>
+      </details>
+
+      {elevated && (
+        <details className="sp-detail sp-protocol">
+          <summary><AlertTriangle size={16} aria-hidden="true" /> Response reference <ChevronDown size={15} aria-hidden="true" /></summary>
+          <div className="sp-detail-body">
+            <h4>{protocol.title}</h4>
+            <ol className="sp-steps">
+              {protocol.steps.map((step) => <li key={step}>{step}</li>)}
+            </ol>
+          </div>
+        </details>
       )}
 
-      {needsKit && item && (
-        <div className={`sp-kit ${blocked ? 'bad' : ''}`}>
-          <div className="sp-kit-head"><Pill size={14} /> MEDICAL KIT CHECK</div>
-
-          {drawer && (
-            <div className="sp-drawers">
-              {DRAWERS.map((d) => {
-                const target = d === drawer;
-                return (
-                  <div key={d} className={`sp-drawer ${target ? (open ? 'open' : 'target') : ''}`}>{d}</div>
-                );
-              })}
-            </div>
+      {elevated && fragment && (
+        <section className="sp-kit">
+          <h4><Package size={16} aria-hidden="true" /> Medical kit check</h4>
+          {item ? (
+            <>
+              <p className="sp-kit-name">{item.name}</p>
+              <dl className="sp-kit-data">
+                <div><dt>Remaining</dt><dd>{item.qty} {item.unit}</dd></div>
+                <div><dt>Location</dt><dd>{item.location}</dd></div>
+              </dl>
+              {drawer && (
+                <div className="sp-drawers" aria-hidden="true">
+                  {DRAWERS.map((slot) => <span key={slot} data-target={drawer === slot}>{slot}</span>)}
+                </div>
+              )}
+              {item.warning && <p className="sp-warning"><AlertTriangle size={14} aria-hidden="true" /> {item.warning}</p>}
+              {dispenseError && <p className="sp-error" role="alert">{dispenseError}</p>}
+              {!inventoryAvailable && !recorded && <p className="sp-kit-help">Inventory updates are temporarily unavailable.</p>}
+              <button
+                className="sp-dispense"
+                type="button"
+                disabled={recorded || blocked || !inventoryAvailable || dispensePending}
+                onClick={() => onDispense(item, item.name)}
+              >
+                {recorded ? (
+                  <><Check size={15} aria-hidden="true" /> Dispense recorded</>
+                ) : (
+                  <>
+                    {dispensePending ? 'Recording…' : blocked ? 'Supply unavailable' : 'Record one unit dispensed'}
+                    {!dispensePending && !blocked && <ArrowUpRight size={14} aria-hidden="true" />}
+                  </>
+                )}
+              </button>
+              {recorded && <span className="sp-recorded" role="status">Inventory updated for {item.name}.</span>}
+            </>
+          ) : (
+            <p className="sp-kit-help">
+              {inventoryAvailable ? 'The associated supply was not found in inventory.' : 'Inventory is unavailable until the backend reconnects.'}
+            </p>
           )}
-
-          <div>Recommended: <strong>{item.name}</strong></div>
-          <div>Inventory check: <strong>{item.qty} {item.unit}</strong> remaining</div>
-          <div>Location: {item.location}</div>
-          {item.warning && <div className="sp-warn">Warning: {item.warning}</div>}
-
-          <button
-            className={`sp-unlock ${open ? 'done' : ''}`}
-            disabled={open || blocked}
-            onClick={() => onDispense(item, key)}
-          >
-            <Lock size={13} />{' '}
-            {blocked
-              ? 'CANNOT DISPENSE · SEE WARNING'
-              : open
-              ? `${drawer ? `DRAWER ${drawer} UNLOCKED` : 'ITEM RELEASED'} · DISPENSE LOGGED`
-              : `ACKNOWLEDGE & UNLOCK${drawer ? ` DRAWER ${drawer}` : ''}`}
-          </button>
-        </div>
+        </section>
       )}
     </div>
   );

@@ -1,66 +1,80 @@
-version: '1.0'
-
 services:
   db:
     image: postgres:15-alpine
-    container_name: astrotwin_db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: astronaut
-      POSTGRES_PASSWORD: deepspacepassword
-      POSTGRES_DB: medical_inventory
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-astronaut}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deepspacepassword}
+      POSTGRES_DB: ${POSTGRES_DB:-medical_inventory}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     volumes:
       - pgdata:/var/lib/postgresql/data
+    networks:
+      - data
 
   backend:
     build: ./backend
-    container_name: astrotwin_backend
     restart: unless-stopped
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://astronaut:deepspacepassword@db:5432/medical_inventory
-      - OLLAMA_BASE_URL=http://ollama:11434
+    init: true
     depends_on:
-      - db
-      - ollama
-    volumes:
-      - ./backend:/app
-  
+      db:
+        condition: service_healthy
+    environment:
+      ASTROTWIN_MODE: ${ASTROTWIN_MODE:-demo}
+      ASTROTWIN_OPERATOR_KEY: ${ASTROTWIN_OPERATOR_KEY:-}
+      ASTROTWIN_TELEMETRY_KEY: ${ASTROTWIN_TELEMETRY_KEY:-}
+      ASTROTWIN_VIEWER_KEY: ${ASTROTWIN_VIEWER_KEY:-}
+      ASTROTWIN_NASA_API_KEY: ${ASTROTWIN_NASA_API_KEY:-}
+      ASTROTWIN_SEED_INVENTORY: ${ASTROTWIN_SEED_INVENTORY:-}
+      ASTROTWIN_CORS_ORIGINS: ${ASTROTWIN_CORS_ORIGINS:-}
+      ASTROTWIN_TELEMETRY_STALE_SECONDS: ${ASTROTWIN_TELEMETRY_STALE_SECONDS:-30}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-medical_inventory}
+      POSTGRES_USER: ${POSTGRES_USER:-astronaut}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-deepspacepassword}
+      DATABASE_URL: ${DATABASE_URL:-}
+      WEB_CONCURRENCY: ${ASTROTWIN_WORKERS:-2}
+    ports:
+      - "127.0.0.1:${ASTROTWIN_API_PORT:-8000}:8000"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
+      - data
+
   frontend:
     build: ./frontend
-    container_name: astrotwin_frontend
     restart: unless-stopped
-    ports:
-      - "5173:5173"
-    environment:
-      # Tell React where to find the FastAPI backend when running in Docker
-      - VITE_API_URL=http://localhost:8000
+    init: true
     depends_on:
-      - backend
-    volumes:
-      # Mount your local frontend files so hot-reloading still works inside Docker
-      - ./frontend:/app
-      - /app/node_modules
-
-  ollama:
-    image: ollama/ollama
-    container_name: astrotwin_ollama
-    restart: unless-stopped
+      backend:
+        condition: service_healthy
     ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - "127.0.0.1:${ASTROTWIN_HTTP_PORT:-5173}:8080"
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - app
 
 volumes:
   pgdata:
-  ollama_data:
+
+networks:
+  app:
+  data:
+    internal: true

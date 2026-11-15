@@ -1,169 +1,177 @@
-import { MapPin, Package, ListChecks, Bot, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, Bot, ClipboardList, ListChecks, MapPin, Package, RefreshCw, ShieldCheck } from 'lucide-react';
+import type { Protocol, TriageItem } from './api';
+import { InventoryStatusBadge, type PanelConnection } from './InventoryPanel';
 import './TriagePanel.css';
 
-export interface TriageItem {
-  name: string;
-  qty: number;
-  unit?: string;
-  location: string;
-  potency_loss_pct: number;
-  status?: 'ok' | 'low' | 'degraded' | 'unusable' | 'out';
-  warning?: string | null;
-}
+export type { Finding, Protocol, TriageItem, TriageStep } from './api';
 
-export interface TriageStep {
-  n: number;
-  title: string;
-  action: string;
-  item: TriageItem | null;
-  caution: string | null;
-}
-
-export interface Finding {
-  label: string;
-  value: string;
-  state: 'low' | 'high' | 'alert';
-}
-
-export interface Protocol {
-  id: number;
-  severity: 'CRITICAL' | 'WARNING';
-  headline: string;
-  findings: Finding[];
-  steps: TriageStep[];
-  monitoring: string[];
-  escalation: string;
-  source: string;
-  rationale: string;
-  rationale_status: 'pending' | 'ready' | 'fallback';
-  flags?: string[];   // which readings tripped (hypoxia, tachycardia, hypertension, edema, bone_loss)
-  age_s: number;
-}
-
-const formatAge = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m`);
-
-const STATUS_LABEL: Record<string, string> = {
-  ok: 'IN STOCK',
-  low: 'LOW STOCK',
-  degraded: 'IN STOCK · REDUCED POTENCY',
-  unusable: 'TOO DEGRADED',
-  out: 'OUT OF STOCK',
+const rationaleLabels: Record<Protocol['rationale_status'], string> = {
+  pending: 'Generating',
+  ready: 'Available',
+  fallback: 'Standard guidance',
 };
 
-function ItemStrip({ item }: { item: TriageItem }) {
-  const remaining = Math.max(0, 100 - item.potency_loss_pct);
-  const status = item.status ?? (item.qty <= 3 ? 'low' : 'ok');
-  const bad = status === 'out' || status === 'unusable';
+function formatAge(seconds: number) {
+  if (seconds < 60) return `${Math.max(0, seconds)}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3600)}h`;
+}
+
+function ItemStrip({ item, label }: { item: TriageItem; label: string }) {
+  const potency = Math.max(0, Math.min(100, 100 - item.potency_loss_pct));
   return (
-    <div className={`tp-item ${bad ? 'bad' : ''}`}>
-      <div className="tp-item-check">
-        <span className="tp-item-check-label">Inventory check</span>
-        <span className={`tp-status ${status}`}>{STATUS_LABEL[status]}</span>
-      </div>
+    <div className="tp-item">
       <div className="tp-item-top">
-        <span className="tp-item-name">
-          <Package size={14} /> {item.name}
-        </span>
-        <span className={`tp-qty ${status === 'low' || bad ? 'low' : ''}`}>
-          {item.qty} {item.unit ?? ''} remaining
-        </span>
+        <span className="tp-item-caption">{label}</span>
+        <InventoryStatusBadge status={item.status} />
       </div>
-      <div className="tp-item-loc">
-        <MapPin size={13} /> {item.location}
+      <div className="tp-item-name"><Package size={14} aria-hidden="true" /> <strong>{item.name}</strong></div>
+      <div className="tp-item-meta">
+        <span><MapPin size={13} aria-hidden="true" /> {item.location}</span>
+        <span>{item.qty} {item.qty === 1 ? item.unit.replace(/s$/, '') : item.unit} remaining</span>
       </div>
-      <div className="tp-potency">
-        <span className="tp-potency-label">Potency {remaining.toFixed(0)}%</span>
-        <div className="tp-bar">
-          <div
-            className={`tp-bar-fill ${item.potency_loss_pct > 0 ? 'degraded' : ''}`}
-            style={{ width: `${remaining}%` }}
-          />
-        </div>
-        {item.potency_loss_pct > 0 && (
-          <span className="tp-potency-note">-{item.potency_loss_pct}% from radiation / flight time</span>
-        )}
-      </div>
+      {item.potency_loss_pct > 0 && <div className="tp-item-potency">{potency.toFixed(0)}% recorded potency</div>}
+      {item.warning && <div className="tp-caution"><AlertTriangle size={14} aria-hidden="true" /> {item.warning}</div>}
     </div>
   );
 }
 
-export default function TriagePanel({ protocol, active }: { protocol: Protocol | null; active: boolean }) {
+interface Props {
+  protocol: Protocol | null;
+  active: boolean;
+  inventory?: TriageItem[];
+  connection?: PanelConnection;
+}
+
+export default function TriagePanel({ protocol, active, inventory = [], connection = 'online' }: Props) {
   if (!protocol) {
-    return <div className="tp-empty">Awaiting biometric or environmental anomaly trigger...</div>;
+    if (connection === 'loading') {
+      return (
+        <div className="tp-empty" role="status">
+          <span className="tp-empty-icon"><RefreshCw size={20} aria-hidden="true" /></span>
+          <strong>Checking for a triage protocol…</strong>
+        </div>
+      );
+    }
+
+    if (connection === 'offline') {
+      return (
+        <div className="tp-empty" role="status">
+          <span className="tp-empty-icon"><AlertTriangle size={20} aria-hidden="true" /></span>
+          <strong>Triage is unavailable</strong>
+          <p>The API connection is offline.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="tp-empty" role="status">
+        <span className="tp-empty-icon"><Activity size={20} aria-hidden="true" /></span>
+        <strong>{active ? 'Awaiting a triage protocol' : 'No active triage protocol'}</strong>
+        <p>{active
+          ? 'The API reported an alert. Response steps will appear when it returns a protocol.'
+          : 'Response steps appear here when a telemetry or environmental alert triggers a protocol.'}</p>
+      </div>
+    );
   }
 
-  const bannerClass = active ? protocol.severity.toLowerCase() : 'past';
+  const online = connection === 'online';
+  const current = online && active;
+  const severity = protocol.severity === 'CRITICAL' ? 'Critical' : 'Warning';
+  const bannerClass = current ? protocol.severity.toLowerCase() : 'past';
+  const age = online && protocol.age_s !== undefined ? `Created ${formatAge(protocol.age_s)} ago` : '';
 
   return (
-    <div className={`tp-scroll ${active ? '' : 'dimmed'}`}>
-      {/* Severity banner */}
-      <div className={`tp-banner ${bannerClass}`}>
+    <article className="tp-scroll">
+      <div className={`tp-banner tp-banner--${bannerClass}`}>
         <div className="tp-banner-top">
-          <span className="tp-sev">
-            <AlertTriangle size={16} /> {active ? protocol.severity : 'LAST EVENT'}
+          <span className="tp-sev" role="status">
+            <AlertTriangle size={14} aria-hidden="true" />
+            {current ? `Active ${severity.toLowerCase()} alert` : `${online ? 'Previous' : 'Last received'} ${severity.toLowerCase()} alert`}
           </span>
-          <span className="tp-age">{active ? 'ACTIVE NOW' : `${formatAge(protocol.age_s)} ago · vitals recovered`}</span>
+          {age && <span className="tp-age">{age}</span>}
         </div>
-        <div className="tp-headline">{protocol.headline}</div>
-        <div className="tp-chips">
-          {protocol.findings.map((f) => (
-            <span key={f.label} className={`tp-chip ${f.state}`}>
-              {f.label}: <strong>{f.value}</strong>
-              {f.state === 'low' ? ' ▼' : f.state === 'high' ? ' ▲' : ''}
-            </span>
-          ))}
-        </div>
+        <h3 className="tp-headline">{protocol.headline}</h3>
+        {protocol.findings.length > 0 && (
+          <ul className="tp-chips" role="list" aria-label="Triage findings">
+            {protocol.findings.map((finding) => (
+              <li key={`${finding.label}-${finding.value}`} className="tp-chip">
+                {finding.label} <strong>{finding.value}</strong>
+                {finding.state === 'low' && <span className="tp-reading-state">Low</span>}
+                {finding.state === 'high' && <span className="tp-reading-state">High</span>}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* Steps */}
-      <h4 className="tp-section">What to do, in order</h4>
-      {protocol.steps.map((s) => (
-        <div key={s.n} className="tp-step">
-          <div className="tp-step-num">{s.n}</div>
-          <div className="tp-step-body">
-            <div className="tp-step-title">{s.title}</div>
-            <div className="tp-step-action">{s.action}</div>
-            {s.item && <ItemStrip item={s.item} />}
-            {s.caution && (
-              <div className="tp-caution">
-                <AlertTriangle size={13} /> {s.caution}
-              </div>
-            )}
+      {!online && (
+        <p className="tp-stale" role="status">Live updates are unavailable while disconnected.</p>
+      )}
+
+      <section className="tp-block">
+        <h4 className="tp-section"><ClipboardList aria-hidden="true" size={15} /> Response sequence</h4>
+        {protocol.steps.length > 0 ? (
+          <ol className="tp-steps" role="list">
+            {protocol.steps.map((step, index) => {
+              const number = step.n ?? index + 1;
+              const liveItem = current && step.item
+                ? inventory.find((item) => item.name === step.item?.name)
+                : undefined;
+              const item = liveItem ?? step.item;
+              const snapshotWarning = step.item?.warning;
+              const caution = snapshotWarning && step.caution?.endsWith(snapshotWarning)
+                ? step.caution.slice(0, -snapshotWarning.length).trim()
+                : step.caution;
+              return (
+                <li key={`${protocol.id}-${number}`} className="tp-step" value={number}>
+                  <span className="tp-step-num" aria-hidden="true">{number}</span>
+                  <div className="tp-step-body">
+                    <h5 className="tp-step-title">{step.title}</h5>
+                    <p className="tp-step-action">{step.action}</p>
+                    {caution && <p className="tp-caution"><AlertTriangle size={14} aria-hidden="true" /> {caution}</p>}
+                    {item && <ItemStrip item={item} label={liveItem ? 'Current inventory' : 'Inventory at time of alert'} />}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        ) : <p className="tp-empty-section">The API returned no response steps for this alert.</p>}
+      </section>
+
+      {protocol.monitoring.length > 0 && (
+        <section className="tp-block">
+          <h4 className="tp-section"><ListChecks size={15} aria-hidden="true" /> Monitoring</h4>
+          <ul className="tp-monitor">
+            {protocol.monitoring.map((task) => <li key={task}>{task}</li>)}
+          </ul>
+        </section>
+      )}
+
+      {protocol.escalation && (
+        <section className="tp-escalation">
+          <h4 className="tp-section"><AlertTriangle size={15} aria-hidden="true" /> Escalation</h4>
+          <p>{protocol.escalation}</p>
+        </section>
+      )}
+
+      {(protocol.rationale || protocol.rationale_status === 'pending') && (
+        <section className="tp-rationale">
+          <div className="tp-rationale-head">
+            <h4 className="tp-section"><Bot size={15} aria-hidden="true" /> Rationale</h4>
+            <span className="tp-rationale-status">{rationaleLabels[protocol.rationale_status]}</span>
           </div>
+          {protocol.rationale && <p>{protocol.rationale}</p>}
+        </section>
+      )}
+
+      <footer className="tp-footer">
+        <ShieldCheck size={15} aria-hidden="true" />
+        <div>
+          <p>Decision support only. Confirm with the Crew Medical Officer.</p>
+          {protocol.source && <p>Source · {protocol.source}</p>}
         </div>
-      ))}
-
-      {/* Monitoring */}
-      <h4 className="tp-section">
-        <ListChecks size={14} /> Keep monitoring
-      </h4>
-      <ul className="tp-monitor">
-        {protocol.monitoring.map((m) => (
-          <li key={m}>{m}</li>
-        ))}
-      </ul>
-
-      {/* AI explanation */}
-      <div className="tp-ai">
-        <div className="tp-ai-head">
-          <span>
-            <Bot size={14} /> Why this matters
-          </span>
-          <span className={`tp-ai-status ${protocol.rationale_status}`}>
-            {protocol.rationale_status === 'pending'
-              ? 'AI generating…'
-              : protocol.rationale_status === 'ready'
-              ? 'Local AI (Ollama)'
-              : 'Standard guidance'}
-          </span>
-        </div>
-        <p>{protocol.rationale}</p>
-      </div>
-
-      <div className="tp-escalation">{protocol.escalation}</div>
-      <div className="tp-footer">
-        <ShieldCheck size={12} /> Source: {protocol.source}. Decision support only. Confirm with the Crew Medical Officer.
-      </div>
-    </div>
+      </footer>
+    </article>
   );
 }
