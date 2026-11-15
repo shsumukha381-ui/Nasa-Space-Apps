@@ -71,8 +71,8 @@ Designed to run completely locally on a Linux environment, simulating an isolate
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-org/astrotwin.git
-   cd astrotwin
+   git clone https://github.com/tejassa272-png/Nasa-Space-Apps.git
+   cd Nasa-Space-Apps
    ```
 2. **Start the localized Docker cluster:**
    ```bash
