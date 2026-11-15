@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { 
   Activity, Zap, HeartPulse, Database, TrendingUp, ShieldAlert, 
-  LayoutDashboard, Stethoscope, Package, MonitorPlay 
+  Sliders, Stethoscope, Package, MonitorPlay 
 } from 'lucide-react';
 import BioTwin from './BioTwin';
 import VitalsChart, { type VitalsSample } from './VitalsChart';
@@ -21,7 +21,8 @@ const HISTORY_LIMIT = 40;
 
 function App() {
   // --- UI Routing State ---
-  const [view, setView] = useState<'dashboard' | 'triage' | 'inventory' | 'demo'>('dashboard');
+  // The default view is now the Judge's Sandbox
+  const [view, setView] = useState<'sandbox' | 'triage' | 'inventory' | 'demo'>('sandbox');
 
   const [data, setData] = useState({
     vitals: { heart_rate: '--', spo2: '--', bp_sys: '--', bp_dia: '--' } as Record<string, number | string>,
@@ -75,12 +76,10 @@ function App() {
     return () => clearTimeout(t);
   }, [inputs]);
 
-  // A real anomaly switches the view to the live triage steps.
+  // A real anomaly switches the view's inner tab to the live triage steps.
   useEffect(() => {
     if (data.is_critical) {
       setTab('triage');
-      // Optional: Auto-switch to triage page when a critical alert hits
-      // setView('triage'); 
     }
   }, [data.is_critical]);
 
@@ -108,8 +107,6 @@ function App() {
     setSelected(id);
     if (id) {
       setTab('guide');
-      // If clicking the 3D model from dashboard, take them directly to the Guide page
-      if (view === 'dashboard') setView('triage');
     }
   };
 
@@ -204,8 +201,8 @@ function App() {
       {/* --- MASTER NAVIGATION SIDEBAR --- */}
       <nav className="master-nav">
         <div className="nav-brand">AT</div>
-        <button className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')} title="Main Dashboard">
-          <LayoutDashboard size={20} />
+        <button className={`nav-item ${view === 'sandbox' ? 'active' : ''}`} onClick={() => setView('sandbox')} title="Judge's Sandbox">
+          <Sliders size={20} />
         </button>
         <button className={`nav-item ${view === 'triage' ? 'active' : ''}`} onClick={() => setView('triage')} title="System Guide & Live Triage">
           <Stethoscope size={20} />
@@ -237,16 +234,14 @@ function App() {
           </div>
         </header>
 
-        {/* PAGE 1: Main Dashboard */}
-        {view === 'dashboard' && (
-          <div className="dashboard-grid">
-            <div className="col-left">{renderVitals()}{renderTrend()}</div>
+        {/* PAGE 1: Judge's Sandbox */}
+        {view === 'sandbox' && (
+          <div className="dashboard-grid" style={{ gridTemplateColumns: '1.2fr 1fr' }}>
             <div className="col-left" style={{ minHeight: 0 }}>
               <SandboxPanel inputs={inputs} onChange={setInputs} />
               {renderTwin()}
             </div>
             <div className="col-right">
-              <InventoryPanel items={data.inventory ?? []} inUse={inUse} />
               <div className={`panel ${data.is_critical ? 'critical' : ''}`} style={{ flex: 1, minHeight: 0 }}>
                 <div className="panel-header" style={{ justifyContent: 'space-between' }}>
                   <div className="tabs">
