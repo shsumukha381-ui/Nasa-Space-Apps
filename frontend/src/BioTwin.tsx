@@ -6,32 +6,29 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { STATUS_COLOR, type Status, type SystemId, type SystemState } from './engine';
 import './BioTwin.css';
 
-// ---- Tuning knobs (change these, save, and the page hot-reloads) ----
-const MODEL_URL = '/astronaut.glb';
-const MODEL_HEIGHT = 3.2;      // height of the figure in scene units
-const FEET_Y = -1.57;          // where the feet sit (viewport bottom is about -2.07)
-const ROTATION_Y = 0;          // set to Math.PI if the figure faces backwards
-const ANCHOR_Z = 0.3;          // how far in front of the body centre the anchor sits
-const DOT_SPREAD = 1.25;       // distance of each dot from the body centre (bigger = more space)
-const HOTSPOT_Y = 0;           // move ALL hotspots up (+) or down (-)
-const CAMERA_Z = 5.0;
+// ---- Tuning knobs ----
+const MODEL_URL = '/spacesuit.glb'; // Updated to the new model name
+const MODEL_HEIGHT = 3.2;      
+const FEET_Y = -1.57;          
+const ROTATION_Y = 0;          
+const ANCHOR_Z = 0.4;          // Pushed out slightly for the bulkier suit
+const DOT_SPREAD = 1.25;       
+const HOTSPOT_Y = 0;           
+const CAMERA_Z = 5.5;          // Pulled camera back slightly
 // ---------------------------------------------------------------------
 
 type Vec3 = [number, number, number];
 
-// Positions are fractions of the figure's height (0 = feet, 1 = top of head), so they
-// follow the model if you change MODEL_HEIGHT or swap the model.
-//   anchor: the point ON the body       dotY: height of the floating dot (kept >= 0.2 apart per side)
+// ADJUSTED: New hotspot anchors tailored for the spacesuit.glb proportions
 const HOTSPOTS: Record<SystemId, { anchor: [number, number]; dotY: number; side: 'left' | 'right' }> = {
-  brain:  { anchor: [0.00, 0.955], dotY: 0.93, side: 'right' },
-  eyes:   { anchor: [-0.03, 0.915], dotY: 0.93, side: 'left' },
-  lungs:  { anchor: [-0.12, 0.74], dotY: 0.70, side: 'left' },
-  heart:  { anchor: [0.10, 0.69], dotY: 0.70, side: 'right' },
-  immune: { anchor: [-0.10, 0.55], dotY: 0.47, side: 'left' },
-  bones:  { anchor: [0.12, 0.27], dotY: 0.27, side: 'right' },
+  brain:  { anchor: [0.00, 0.90], dotY: 0.93, side: 'right' },
+  eyes:   { anchor: [-0.05, 0.85], dotY: 0.93, side: 'left' },
+  lungs:  { anchor: [-0.15, 0.70], dotY: 0.70, side: 'left' },
+  heart:  { anchor: [0.15, 0.65], dotY: 0.70, side: 'right' },
+  immune: { anchor: [-0.15, 0.50], dotY: 0.47, side: 'left' },
+  bones:  { anchor: [0.15, 0.25], dotY: 0.27, side: 'right' },
 };
 
-/** Bounding box of what is actually RENDERED (skinned meshes use their deformed vertices). */
 function measureRendered(root: THREE.Object3D): THREE.Box3 {
   root.updateMatrixWorld(true);
   const box = new THREE.Box3();
@@ -111,34 +108,30 @@ function Figure({ systems, selected, onSelect, tint }: FigureProps) {
   const { scene } = useGLTF(MODEL_URL);
   const sway = useRef<THREE.Group>(null);
 
-  // One shared hologram material; its colour follows the worst body-system status.
-  const material = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        wireframe: true,
-        transparent: true,
-        opacity: 0.4,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      }),
-    []
-  );
-  useEffect(() => {
-    const base = tint === 'nominal' ? '#38bdf8' : STATUS_COLOR[tint];
-    material.color.set(base);
-    material.emissive.set(base);
-    material.emissiveIntensity = 0.8;
-  }, [material, tint]);
+  // DELETED: The transparent hologram material override. 
+  // We now render the GLTF with its native textures.
 
   const { model, fit } = useMemo(() => {
     const cloned = SkeletonUtils.clone(scene);
+    
+    // Add an emissive tint to the whole model based on status, but keep textures
+    const baseColor = tint === 'nominal' ? null : STATUS_COLOR[tint];
+    
     cloned.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
-        (child as THREE.Mesh).material = material;
-        child.frustumCulled = false;
+         child.frustumCulled = false;
+         const mesh = child as THREE.Mesh;
+         
+         // If there is an alert, give the suit a slight glowing tint of that color
+         if (baseColor && mesh.material) {
+             const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+             mat.emissive = new THREE.Color(baseColor);
+             mat.emissiveIntensity = 0.3;
+             mesh.material = mat;
+         }
       }
     });
+    
     const box = measureRendered(cloned);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
@@ -146,9 +139,9 @@ function Figure({ systems, selected, onSelect, tint }: FigureProps) {
       model: cloned,
       fit: { scale: MODEL_HEIGHT / (size.y || 1), cx: center.x, cz: center.z, minY: box.min.y },
     };
-  }, [scene, material]);
+  }, [scene, tint]);
 
-  // Gentle sway instead of a full spin, so the hotspots always stay on the front of the body.
+  // Gentle sway
   useFrame(({ clock }) => {
     if (sway.current) sway.current.rotation.y = ROTATION_Y + Math.sin(clock.elapsedTime * 0.4) * 0.12;
   });
@@ -179,8 +172,12 @@ interface Props {
 export default function BioTwin({ systems, selected, onSelect, tint }: Props) {
   return (
     <Canvas camera={{ position: [0, 0.1, CAMERA_Z], fov: 45 }} onPointerMissed={() => onSelect(null)}>
-      <ambientLight intensity={0.8} />
-      <spotLight position={[10, 10, 10]} angle={0.2} penumbra={1} intensity={2} color="#38bdf8" />
+      
+      {/* UPDATED LIGHTING: Required for rendering opaque, textured models */}
+      <ambientLight intensity={1.5} />
+      <directionalLight position={[5, 5, 5]} intensity={2} />
+      <spotLight position={[-5, 5, 5]} angle={0.5} penumbra={1} intensity={1} color="#38bdf8" />
+      <spotLight position={[0, -5, 5]} angle={0.5} penumbra={1} intensity={1} color={tint === 'nominal' ? '#ffffff' : STATUS_COLOR[tint]} />
 
       {/* Ground ring under the feet */}
       <mesh position={[0, FEET_Y + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -195,7 +192,6 @@ export default function BioTwin({ systems, selected, onSelect, tint }: Props) {
           </Html>
         }
       >
-        {/* Sacrificial empty overlay: the first Html overlay in a scene can fail to appear. */}
         <Html position={[0, -5, 0]}><span /></Html>
         <Figure systems={systems} selected={selected} onSelect={onSelect} tint={tint} />
       </Suspense>
